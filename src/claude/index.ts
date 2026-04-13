@@ -12,8 +12,7 @@
  *           ├── claude/skill.ts  → reads assets/, writes ~/.claude/skills/tapd-api/
  *           └── claude/mcp.ts   → reads/writes ~/.claude/settings.json
  *
- * Both operations are independent and run sequentially (not in parallel)
- * so that interactive prompts don't interleave on the terminal.
+ * Both operations are independent and run sequentially (not in parallel).
  */
 
 export * from './skill';
@@ -37,16 +36,8 @@ export interface ClaudeIntegrationOptions {
   };
   /** Options forwarded to registerConfluenceMcp() */
   mcp?: {
-    force?:           boolean;
-    promptForConfig?: boolean;
-    config?: {
-      baseUrl?:      string;
-      mode?:         'server' | 'cloud';
-      authMode?:     'auto' | 'basic' | 'bearer';
-      username?:     string;
-      token?:        string;
-      defaultSpace?: string;
-    };
+    /** 强制覆盖已存在的注册项 @default false */
+    force?: boolean;
   };
 }
 
@@ -60,7 +51,7 @@ export interface ClaudeIntegrationResult {
 /**
  * Run the full Claude Code integration in one call:
  *  1. Inject tapd-api skill into ~/.claude/skills/
- *  2. Register confluence-mcp-server in ~/.claude/settings.json
+ *  2. Register confluence-mcp (HTTP mode) in ~/.claude/settings.json
  *
  * Only call this when claudeInfo.installed === true.
  *
@@ -68,7 +59,6 @@ export interface ClaudeIntegrationResult {
  * if (claudeInfo.installed) {
  *   const result = await runClaudeIntegration(claudeInfo, {
  *     skill: { token: process.env['TAPD_API_TOKEN'] },
- *     mcp:   { config: { baseUrl: process.env['CONF_BASE_URL'] } },
  *   });
  * }
  */

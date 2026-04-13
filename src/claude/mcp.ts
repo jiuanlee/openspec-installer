@@ -1,113 +1,55 @@
 /**
- * mcp.ts — confluence-mcp-server Registration into Claude Code settings.json
+ * mcp.ts — confluence-mcp Registration into Claude Code settings.json
  *
- * Package: confluence-mcp-server@1.1.0
- * NPM:     https://www.npmjs.com/package/confluence-mcp-server
+ * Transport: HTTP (type: "http")
+ * Service:   公司统一部署的远程 Confluence MCP 服务
+ *            http://dy.gaodunwangxiao.com/mcp/server/3HHD6dOdK1eJF1U5/mcp
  *
- * Responsibilities:
- *  1. Read ~/.claude/settings.json (preserves existing keys like "model")
- *  2. Merge the confluence-mcp-server entry under settings.mcpServers
- *  3. Collect required env vars interactively or from environment / opts
- *  4. Write the result atomically (tmp → fsync → rename)
- *  5. Idempotent: skip if already registered, unless force=true
- *  6. Return a typed McpInstallResult; never throw
+ * 与 stdio 模式的区别：
+ *  - 无需本地安装任何 npm 包
+ *  - 无需配置 Confluence 账号 / Token
+ *  - Token 内嵌在 URL 中，由公司统一管理
+ *  - 所有团队成员使用同一服务地址
  *
- * Real settings.json structure written by this module:
+ * 写入 settings.json 的结构：
  *
  *   {
  *     "mcpServers": {
  *       "confluence-mcp": {
- *         "command": "npx",
- *         "args": ["-y", "confluence-mcp-server"],
- *         "env": {
- *           "CONF_BASE_URL":      "https://confluence.gaodunwangxiao.com",
- *           "CONF_MODE":          "server",
- *           "CONF_AUTH_MODE":     "auto",
- *           "CONF_USERNAME":      "your-username",
- *           "CONF_TOKEN":         "your-token",
- *           "CONF_DEFAULT_SPACE": ""
- *         }
+ *         "type": "http",
+ *         "url":  "http://dy.gaodunwangxiao.com/mcp/server/3HHD6dOdK1eJF1U5/mcp"
  *       }
  *     }
  *   }
  *
- * Environment variables (confluence-mcp-server):
- *  CONF_BASE_URL      Confluence base URL (required)
- *  CONF_MODE          "cloud" | "server"  (default: "server")
- *  CONF_AUTH_MODE     "auto" | "basic" | "bearer"  (default: "auto")
- *  CONF_USERNAME      Login username (required for cloud; required in basic mode)
- *  CONF_TOKEN         API token (cloud: Atlassian API token; server: Bearer token)
- *  CONF_PASSWORD      Password (alternative to CONF_TOKEN in basic mode)
- *  CONF_DEFAULT_SPACE Default Confluence space key (optional)
+ * 写入位置：~/.claude/settings.json（全局，对所有项目生效）
  *
- * Atomic write strategy:
- *   write to settings.json.tmp → fsync → rename to settings.json
+ * 原子写策略：tmp → fsync → rename，防止写入中断导致文件损坏
  */
 
-import * as fs       from 'fs';
-import * as path     from 'path';
-import * as readline from 'readline';
+import * as fs   from 'fs';
+import * as path from 'path';
 import type { ClaudeInfo } from '../detect/claude';
 
 // ─────────────────────────────────────────────
 // Constants
 // ─────────────────────────────────────────────
 
-const SERVER_NAME   = 'confluence-mcp';
-const NPM_PACKAGE   = 'confluence-mcp-server';
+const SERVER_NAME = 'confluence-mcp';
 
-/**
- * Deployment mode.
- * "server" = Confluence Server / Data Center (on-premise, typical enterprise).
- * "cloud"  = Confluence Cloud (atlassian.net).
- */
-export type ConfMode = 'server' | 'cloud';
+/** 公司统一部署的 Confluence MCP HTTP 服务地址 */
+const MCP_HTTP_URL = 'http://dy.gaodunwangxiao.com/mcp/server/3HHD6dOdK1eJF1U5/mcp';
 
 // ─────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────
 
-export interface McpEnvConfig {
-  /** Confluence base URL. e.g. https://confluence.gaodunwangxiao.com */
-  baseUrl:      string;
-  /** Deployment mode: "server" (default) or "cloud" */
-  mode:         ConfMode;
-  /**
-   * Auth mode: "auto" (default), "basic", or "bearer".
-   * "auto" tries Bearer first, then Basic.
-   */
-  authMode:     'auto' | 'basic' | 'bearer';
-  /** Login username (required for cloud; required in basic/auto+password mode) */
-  username:     string;
-  /**
-   * Access token.
-   * Cloud: Atlassian personal API token.
-   * Server: Personal access token (used as Bearer) or API token.
-   * Generate at: https://confluence.gaodunwangxiao.com/plugins/personalaccesstokens/usertokens.action
-   */
-  token:        string;
-  /** Optional default Confluence space key, e.g. "DOC" */
-  defaultSpace: string;
-}
-
 export interface McpInstallOptions {
   /**
-   * Overwrite an existing registration.
+   * 强制覆盖已存在的注册项。
    * @default false
    */
   force?: boolean;
-
-  /**
-   * Interactively prompt for missing credentials when stdin is a TTY.
-   * @default true
-   */
-  promptForConfig?: boolean;
-
-  /**
-   * Pre-supply credentials (e.g. from CI environment variables).
-   * Fields not supplied here fall back to env vars → interactive prompt.
-   */
-  config?: Partial<McpEnvConfig>;
 }
 
 export type McpInstallStatus =
@@ -117,25 +59,23 @@ export type McpInstallStatus =
   | 'failed';
 
 export interface McpInstallResult {
-  success:       boolean;
-  status:        McpInstallStatus;
-  settingsFile:  string;
-  /** True when all required fields (baseUrl + token) are non-placeholder values */
-  envConfigured: boolean;
-  summary:       string;
-  warnings:      string[];
+  success:      boolean;
+  status:       McpInstallStatus;
+  settingsFile: string;
+  summary:      string;
+  warnings:     string[];
 }
 
-/** Internal shape of settings.json */
+/** settings.json 的顶层结构 */
 interface ClaudeSettings {
   mcpServers?: Record<string, McpServerEntry>;
   [key: string]: unknown;
 }
 
+/** HTTP 类型的 MCP server 条目 */
 interface McpServerEntry {
-  command: string;
-  args:    string[];
-  env?:    Record<string, string>;
+  type: 'http';
+  url:  string;
 }
 
 // ─────────────────────────────────────────────
@@ -151,8 +91,8 @@ function readSettings(settingsFile: string): ClaudeSettings {
 }
 
 /**
- * Atomic write: tmp → fsync → rename.
- * Prevents a corrupt settings.json if the process is killed mid-write.
+ * 原子写：先写 .tmp → fsync → rename
+ * 进程被 kill 也不会产生半截 JSON
  */
 function writeSettingsAtomic(settingsFile: string, data: ClaudeSettings): void {
   const tmp     = settingsFile + '.tmp';
@@ -169,236 +109,58 @@ function writeSettingsAtomic(settingsFile: string, data: ClaudeSettings): void {
 }
 
 // ─────────────────────────────────────────────
-// Internal: credential resolution
-// ─────────────────────────────────────────────
-
-const PLACEHOLDERS = new Set([
-  'https://confluence.example.com',
-  'your-username',
-  'your-token',
-  'your_api_token',
-]);
-
-function isPlaceholder(v: string | undefined): boolean {
-  return !v || PLACEHOLDERS.has(v);
-}
-
-/**
- * Resolve env config from (in priority):
- *  1. opts.config fields
- *  2. Process environment variables (CONF_*)
- *  3. Interactive TTY prompt for still-missing required fields
- */
-async function resolveEnvConfig(opts: McpInstallOptions): Promise<McpEnvConfig> {
-  const c = opts.config ?? {};
-
-  const resolved: McpEnvConfig = {
-    baseUrl:      c.baseUrl      ?? process.env['CONF_BASE_URL']      ?? '',
-    mode:         c.mode         ?? (process.env['CONF_MODE'] as ConfMode | undefined) ?? 'server',
-    authMode:     c.authMode     ?? (process.env['CONF_AUTH_MODE'] as McpEnvConfig['authMode'] | undefined) ?? 'auto',
-    username:     c.username     ?? process.env['CONF_USERNAME']     ?? '',
-    token:        c.token        ?? process.env['CONF_TOKEN']        ?? '',
-    defaultSpace: c.defaultSpace ?? process.env['CONF_DEFAULT_SPACE'] ?? '',
-  };
-
-  const needsPrompt =
-    (opts.promptForConfig ?? true) &&
-    process.stdin.isTTY &&
-    (isPlaceholder(resolved.baseUrl) || isPlaceholder(resolved.token));
-
-  if (needsPrompt) {
-    await promptMissingFields(resolved);
-  }
-
-  return resolved;
-}
-
-/**
- * Interactive prompt — only asks for fields that are still empty/placeholder.
- */
-function promptMissingFields(cfg: McpEnvConfig): Promise<void> {
-  return new Promise(resolve => {
-    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-
-    console.log('\n[confluence-mcp] Some Confluence credentials are missing.');
-    console.log('  Docs: https://github.com/user/confluence-mcp-server#readme\n');
-
-    const ask = (prompt: string, current: string, cb: (v: string) => void) => {
-      const hint = current ? ` [${current}]` : '';
-      rl.question(`  ${prompt}${hint}: `, answer => {
-        const trimmed = answer.trim();
-        cb(trimmed || current);
-      });
-    };
-
-    function step1() {
-      if (!isPlaceholder(cfg.baseUrl)) return step2();
-      ask('Confluence base URL (e.g. https://confluence.gaodunwangxiao.com)', cfg.baseUrl, v => {
-        cfg.baseUrl = v;
-        step2();
-      });
-    }
-
-    function step2() {
-      if (!isPlaceholder(cfg.username)) return step3();
-      ask('Username (blank to skip)', cfg.username, v => {
-        cfg.username = v;
-        step3();
-      });
-    }
-
-    function step3() {
-      if (!isPlaceholder(cfg.token)) return done();
-      const tokenHint = cfg.mode === 'cloud'
-        ? 'Atlassian API token (https://id.atlassian.com/manage-profile/security/api-tokens)'
-        : 'Personal access token';
-      ask(tokenHint, cfg.token, v => {
-        cfg.token = v;
-        done();
-      });
-    }
-
-    function done() {
-      rl.close();
-      resolve();
-    }
-
-    step1();
-  });
-}
-
-// ─────────────────────────────────────────────
-// Internal: validation helpers
-// ─────────────────────────────────────────────
-
-function isFullyConfigured(env: McpEnvConfig): boolean {
-  return !isPlaceholder(env.baseUrl) && !isPlaceholder(env.token);
-}
-
-function isEntryConfigured(entry: McpServerEntry | undefined): boolean {
-  if (!entry?.env) return false;
-  return (
-    !isPlaceholder(entry.env['CONF_BASE_URL']) &&
-    !isPlaceholder(entry.env['CONF_TOKEN'])
-  );
-}
-
-// ─────────────────────────────────────────────
-// Internal: build MCP entry
-// ─────────────────────────────────────────────
-
-function buildMcpEntry(cfg: McpEnvConfig): McpServerEntry {
-  const env: Record<string, string> = {
-    CONF_BASE_URL:  cfg.baseUrl,
-    CONF_MODE:      cfg.mode,
-    CONF_AUTH_MODE: cfg.authMode,
-    CONF_USERNAME:  cfg.username,
-    CONF_TOKEN:     cfg.token,
-  };
-
-  // Only include optional field when non-empty
-  if (cfg.defaultSpace) {
-    env['CONF_DEFAULT_SPACE'] = cfg.defaultSpace;
-  }
-
-  return {
-    command: 'npx',
-    args:    ['-y', NPM_PACKAGE],
-    env,
-  };
-}
-
-// ─────────────────────────────────────────────
 // Public API
 // ─────────────────────────────────────────────
 
 /**
- * Register confluence-mcp-server in ~/.claude/settings.json.
+ * 将 confluence-mcp（HTTP 模式）注册到 ~/.claude/settings.json。
  *
- * Produces a settings.json entry compatible with Claude Code's MCP stdio
- * transport format, matching the pattern used by official plugins
- * (e.g. context7: `{ command: "npx", args: ["-y", "@upstash/context7-mcp"] }`).
+ * 幂等：已注册时直接返回，除非 force=true。
+ * 深合并：仅写入 mcpServers["confluence-mcp"]，不影响其他字段（如 "model"）。
  *
  * @example
- * // From environment variables (CI / auto-provision)
- * // CONF_BASE_URL=https://confluence.gaodunwangxiao.com
- * // CONF_TOKEN=your-personal-access-token
  * const result = await registerConfluenceMcp(claudeInfo);
- *
- * @example
- * // With pre-supplied credentials
- * const result = await registerConfluenceMcp(claudeInfo, {
- *   config: {
- *     baseUrl:  'https://confluence.gaodunwangxiao.com',
- *     mode:     'server',
- *     username: 'zhangsan',
- *     token:    'NjY4...',
- *   },
- * });
+ * console.log(result.summary);
  */
 export async function registerConfluenceMcp(
   claudeInfo: ClaudeInfo,
   opts: McpInstallOptions = {},
 ): Promise<McpInstallResult> {
   const { force = false } = opts;
-  const warnings: string[] = [];
-  const settingsFile       = claudeInfo.settingsFile;
+  const warnings:    string[] = [];
+  const settingsFile          = claudeInfo.settingsFile;
 
-  // ── Read current settings (preserve model + other keys) ──────────────
+  // ── 读取现有配置（保留 model 等其他字段）────────────────────────────
   const settings = readSettings(settingsFile);
   if (!settings.mcpServers) settings.mcpServers = {};
 
-  const existingEntry = settings.mcpServers[SERVER_NAME];
   const alreadyExists = claudeInfo.existingMcpServers.includes(SERVER_NAME);
 
-  // ── Early exit: already registered, credentials look valid ───────────
+  // ── 幂等检查 ─────────────────────────────────────────────────────────
   if (alreadyExists && !force) {
-    const envConfigured = isEntryConfigured(existingEntry);
     return {
-      success:       true,
-      status:        'already-registered',
+      success:      true,
+      status:       'already-registered',
       settingsFile,
-      envConfigured,
-      summary:       `confluence-mcp already registered in ${path.basename(settingsFile)} — skipping.`,
-      warnings:      envConfigured ? [] : [
-        'Existing entry has placeholder credentials. ' +
-        'Edit settings.json or re-run with force=true to reconfigure.',
-      ],
+      summary:      `confluence-mcp 已注册（HTTP 模式）— 跳过。如需更新请使用 force=true。`,
+      warnings,
     };
   }
 
-  // ── Resolve credentials ──────────────────────────────────────────────
-  const envConfig    = await resolveEnvConfig(opts);
-  const envConfigured = isFullyConfigured(envConfig);
-
-  if (!envConfigured) {
-    if (isPlaceholder(envConfig.baseUrl)) {
-      warnings.push(
-        'CONF_BASE_URL not configured. ' +
-        'Edit settings.json → mcpServers["confluence-mcp"].env.CONF_BASE_URL'
-      );
-    }
-    if (isPlaceholder(envConfig.token)) {
-      warnings.push(
-        'CONF_TOKEN not configured. ' +
-        'For Confluence Server, generate a Personal Access Token at: ' +
-        `${envConfig.baseUrl || 'https://confluence.example.com'}/plugins/personalaccesstokens/usertokens.action`
-      );
-    }
-  }
-
-  // ── Write settings ───────────────────────────────────────────────────
-  settings.mcpServers[SERVER_NAME] = buildMcpEntry(envConfig);
+  // ── 写入 HTTP 条目 ───────────────────────────────────────────────────
+  settings.mcpServers[SERVER_NAME] = {
+    type: 'http',
+    url:  MCP_HTTP_URL,
+  };
 
   try {
     writeSettingsAtomic(settingsFile, settings);
   } catch (err) {
     return {
-      success:       false,
-      status:        'failed',
+      success:      false,
+      status:       'failed',
       settingsFile,
-      envConfigured: false,
-      summary:       `Failed to write ${path.basename(settingsFile)}: ${(err as Error).message}`,
+      summary:      `写入 ${path.basename(settingsFile)} 失败：${(err as Error).message}`,
       warnings,
     };
   }
@@ -406,25 +168,21 @@ export async function registerConfluenceMcp(
   const status: McpInstallStatus = alreadyExists ? 'updated' : 'registered';
 
   return {
-    success:       true,
+    success:      true,
     status,
     settingsFile,
-    envConfigured,
     summary:
-      `confluence-mcp ${status} (${NPM_PACKAGE}) in ${path.basename(settingsFile)}. ` +
-      `Mode: ${envConfig.mode} | Auth: ${envConfig.authMode} | ` +
-      `Credentials: ${envConfigured ? 'configured' : 'placeholder — edit settings.json before use'}.`,
+      `confluence-mcp ${status === 'registered' ? '注册成功' : '已更新'}（HTTP 模式）→ ${MCP_HTTP_URL}`,
     warnings,
   };
 }
 
 /**
- * Pretty-print a McpInstallResult for CLI output.
+ * 格式化 McpInstallResult 用于 CLI 输出。
  */
 export function formatMcpResult(result: McpInstallResult): string {
-  const icon = result.success ? '✔' : '✘';
-  const cred = result.envConfigured ? 'credentials: ✔' : 'credentials: ✘ (needs config)';
-  const lines = [`${icon} confluence-mcp — ${result.summary} | ${cred}`];
+  const icon  = result.success ? '✔' : '✘';
+  const lines = [`${icon} confluence-mcp — ${result.summary}`];
   for (const w of result.warnings) {
     lines.push(`  [warn] ${w}`);
   }

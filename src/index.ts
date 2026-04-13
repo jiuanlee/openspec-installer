@@ -14,17 +14,11 @@
  *
  *  Phase 3 ── Claude Code Integration (async, skipped when Claude not installed)
  *               ├─ injectTapdSkill()       → writes ~/.claude/skills/tapd-api/
- *               └─ registerConfluenceMcp() → merges ~/.claude/settings.json
+ *               └─ registerConfluenceMcp() → writes ~/.claude/settings.json (HTTP mode)
  *
  * Environment variables consumed at runtime:
  *   OPENSPEC_NPM_REGISTRY  custom npm registry for openspec install (optional)
  *   TAPD_API_TOKEN         TAPD personal API token — skips interactive prompt
- *   CONF_BASE_URL          Confluence base URL    — skips interactive prompt
- *   CONF_MODE              server | cloud         (default: server)
- *   CONF_AUTH_MODE         auto | basic | bearer  (default: auto)
- *   CONF_USERNAME          Confluence username
- *   CONF_TOKEN             Confluence access token
- *   CONF_DEFAULT_SPACE     default Confluence space key (optional)
  */
 
 import { detectOs, formatOsInfo, assertSupportedArch } from './detect/os';
@@ -123,17 +117,7 @@ async function main(): Promise<void> {
       promptForToken: true,
       token:          env('TAPD_API_TOKEN'),
     },
-    mcp: {
-      promptForConfig: true,
-      config: {
-        baseUrl:      env('CONF_BASE_URL'),
-        mode:         env('CONF_MODE') as 'server' | 'cloud' | undefined,
-        authMode:     env('CONF_AUTH_MODE') as 'auto' | 'basic' | 'bearer' | undefined,
-        username:     env('CONF_USERNAME'),
-        token:        env('CONF_TOKEN'),
-        defaultSpace: env('CONF_DEFAULT_SPACE'),
-      },
-    },
+    mcp: {},
   });
 
   console.log('\n[tapd-api]      ', formatSkillResult(integrationResult.skill));

@@ -54,6 +54,8 @@ https://www.tapd.cn/tapd_fe/37748852/story/detail/1137748852001368717
 
 在 Claude Code 中直接查询 Confluence 页面内容，无需切换浏览器。
 
+> 使用公司统一部署的远程 MCP 服务（HTTP 模式），无需个人配置账号或 Token。
+
 ---
 
 ## 环境变量（可选）
@@ -63,27 +65,18 @@ https://www.tapd.cn/tapd_fe/37748852/story/detail/1137748852001368717
 | 变量 | 说明 | 示例 |
 |------|------|------|
 | `TAPD_API_TOKEN` | TAPD 个人 API Token | `eyJhbGci...` |
-| `CONF_BASE_URL` | Confluence 实例地址 | `https://confluence.example.com` |
-| `CONF_MODE` | 部署模式：`server`（默认）或 `cloud` | `server` |
-| `CONF_AUTH_MODE` | 认证模式：`auto`（默认）/ `basic` / `bearer` | `auto` |
-| `CONF_USERNAME` | Confluence 登录用户名 | `zhangsan` |
-| `CONF_TOKEN` | Confluence 个人访问令牌 | `NjY4...` |
-| `CONF_DEFAULT_SPACE` | 默认 Confluence 空间 Key（可选） | `DOC` |
 | `OPENSPEC_NPM_REGISTRY` | 自定义 npm registry（企业内网） | `https://npm.company.com` |
+
+> Confluence MCP 使用公司统一部署的 HTTP 服务，无需配置任何 Confluence 相关环境变量。
 
 **示例：CI 无交互安装**
 
 ```bash
 # macOS / Linux
-TAPD_API_TOKEN=your_token \
-CONF_BASE_URL=https://confluence.example.com \
-CONF_TOKEN=your_confluence_token \
-bash install.sh
+TAPD_API_TOKEN=your_token bash install.sh
 
 # Windows PowerShell
 $env:TAPD_API_TOKEN = "your_token"
-$env:CONF_BASE_URL  = "https://confluence.example.com"
-$env:CONF_TOKEN     = "your_confluence_token"
 .\install.ps1
 ```
 
@@ -96,16 +89,6 @@ $env:CONF_TOKEN     = "your_confluence_token"
 1. 登录 [TAPD](https://www.tapd.cn)
 2. 进入 **个人设置 → API 访问 → 申请令牌**
 3. 或直接访问：https://www.tapd.cn/tapd_api_token/token
-
-### Confluence 个人访问令牌（Server / Data Center）
-
-```
-https://confluence.example.com/plugins/personalaccesstokens/usertokens.action
-```
-
-### Confluence API Token（Cloud）
-
-https://id.atlassian.com/manage-profile/security/api-tokens
 
 ---
 
