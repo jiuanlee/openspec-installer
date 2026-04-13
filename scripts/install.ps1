@@ -77,10 +77,32 @@ function Write-Ok([string]$Msg)      { Write-Host "[ok]    $Msg" -ForegroundColo
 function Write-Warn([string]$Msg)    { Write-Host "[warn]  $Msg" -ForegroundColor Yellow }
 function Write-Fatal([string]$Msg)   {
     Write-Host "[fatal] $Msg" -ForegroundColor Red
+    Invoke-Pause
     exit 1
 }
 
-# ── Prerequisite: execution policy ───────────────────────────────────────────
+# ── Pause helper — only when window will close after script ends ──────────────
+#
+# Detection logic:
+#   $Host.Name -eq 'ConsoleHost'  → running in a real powershell.exe window
+#   $Host.UI.RawUI.WindowTitle    → present only in interactive window sessions
+#   [Environment]::UserInteractive → false in pure pipe / CI contexts
+#
+# When invoked as `irm ... | iex`, the script runs inside the CALLER's shell,
+# so $Host.Name is 'ConsoleHost' but the window belongs to the parent process.
+# The safest proxy: check whether stdin is connected to a console (not a pipe).
+function Invoke-Pause {
+    $isInteractive = [Environment]::UserInteractive -and
+                     $Host.Name -eq 'ConsoleHost' -and
+                     -not ([Console]::IsInputRedirected)
+    if ($isInteractive) {
+        Write-Host ""
+        Write-Host "Press any key to close this window..." -ForegroundColor DarkGray
+        $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    }
+}
+
+
 function Assert-ExecutionPolicy {
     $policy = Get-ExecutionPolicy -Scope CurrentUser
     if ($policy -eq 'Restricted') {
@@ -307,6 +329,7 @@ function Main {
 
     Invoke-Installer
     Write-Summary
+    Invoke-Pause
 }
 
 Main
