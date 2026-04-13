@@ -19,6 +19,7 @@
  * Environment variables consumed at runtime:
  *   OPENSPEC_NPM_REGISTRY  custom npm registry for openspec install (optional)
  *   TAPD_API_TOKEN         TAPD personal API token — skips interactive prompt
+ *   LOG_LEVEL              debug | info | warn | error | silent  (default: info)
  */
 
 import { detectOs, formatOsInfo, assertSupportedArch } from './detect/os';
@@ -30,16 +31,11 @@ import {
   formatSkillResult,
   formatMcpResult,
 } from './claude';
+import { logger } from './logger';
 
 // ─────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────
-
-function section(title: string): void {
-  console.log(`\n${'─'.repeat(40)}`);
-  console.log(`  ${title}`);
-  console.log('─'.repeat(40));
-}
 
 function env(key: string): string | undefined {
   const v = process.env[key];
@@ -51,53 +47,51 @@ function env(key: string): string | undefined {
 // ─────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  console.log('');
-  console.log('╔══════════════════════════════════════════╗');
-  console.log('║         openspec-installer v1.0.0        ║');
-  console.log('╚══════════════════════════════════════════╝');
+  logger.raw('');
+  logger.raw('╔══════════════════════════════════════════╗');
+  logger.raw('║         openspec-installer v1.0.0        ║');
+  logger.raw('╚══════════════════════════════════════════╝');
 
   // ────────────────────────────────────────────
   // Phase 1 — Detection
   // ────────────────────────────────────────────
-  section('Phase 1 · Detection');
+  logger.section('Phase 1 · Detection');
 
   const osInfo = detectOs();
-  console.log('[os]     ', formatOsInfo(osInfo));
-  assertSupportedArch(osInfo);  // throws on unsupported arch → caught by main().catch
+  logger.info(formatOsInfo(osInfo));
+  assertSupportedArch(osInfo);
 
   const claudeInfo = detectClaude(osInfo);
-  console.log('[claude] ', formatClaudeInfo(claudeInfo));
+  logger.info(formatClaudeInfo(claudeInfo));
 
   if (!claudeInfo.installed) {
-    console.warn(
-      '\n[warn] Claude Code not found on PATH.\n' +
-      '       Phase 3 (skill + MCP injection) will be skipped.\n' +
-      '       Install Claude Code and re-run to complete setup.'
-    );
+    logger.warn('Claude Code not found on PATH.');
+    logger.warn('Phase 3 (skill + MCP injection) will be skipped.');
+    logger.warn('Install Claude Code and re-run to complete setup.');
   }
 
   // ────────────────────────────────────────────
   // Phase 2 — Installation
   // ────────────────────────────────────────────
-  section('Phase 2 · Install Node.js >= 22');
+  logger.section('Phase 2 · Install Node.js >= 22');
 
   const nodeResult = await ensureNode(osInfo);
-  console.log(formatNodeResult(nodeResult));
+  logger.raw(formatNodeResult(nodeResult));
 
   if (!nodeResult.success) {
-    console.error('\n[fatal] Node.js >= 22 is required. Aborting.');
+    logger.error('Node.js >= 22 is required. Aborting.');
     process.exit(1);
   }
 
-  section('Phase 2 · Install openspec');
+  logger.section('Phase 2 · Install openspec');
 
   const openspecResult = await ensureOpenspec(osInfo, {
     registry: env('OPENSPEC_NPM_REGISTRY'),
   });
-  console.log(formatOpenspecResult(openspecResult));
+  logger.raw(formatOpenspecResult(openspecResult));
 
   if (!openspecResult.success) {
-    console.error('\n[fatal] openspec installation failed. Aborting.');
+    logger.error('openspec installation failed. Aborting.');
     process.exit(1);
   }
 
@@ -105,12 +99,12 @@ async function main(): Promise<void> {
   // Phase 3 — Claude Code Integration
   // ────────────────────────────────────────────
   if (!claudeInfo.installed) {
-    console.log('\n[skip] Phase 3 skipped — Claude Code not installed.\n');
+    logger.warn('Phase 3 skipped — Claude Code not installed.');
     printSummary({ nodeResult, openspecResult, claudeSkipped: true });
     return;
   }
 
-  section('Phase 3 · Claude Code Integration');
+  logger.section('Phase 3 · Claude Code Integration');
 
   const integrationResult = await runClaudeIntegration(claudeInfo, {
     skill: {
@@ -120,11 +114,11 @@ async function main(): Promise<void> {
     mcp: {},
   });
 
-  console.log('\n[tapd-api]      ', formatSkillResult(integrationResult.skill));
-  console.log('[confluence-mcp]', formatMcpResult(integrationResult.mcp));
+  logger.raw(formatSkillResult(integrationResult.skill));
+  logger.raw(formatMcpResult(integrationResult.mcp));
 
   if (!integrationResult.allSuccess) {
-    console.warn('\n[warn] One or more Phase 3 steps failed — see warnings above.');
+    logger.warn('One or more Phase 3 steps failed — see warnings above.');
   }
 
   // ────────────────────────────────────────────
@@ -150,48 +144,48 @@ function printSummary({
   integrationResult,
   claudeSkipped,
 }: SummaryArgs): void {
-  console.log('\n');
-  console.log('╔══════════════════════════════════════════╗');
-  console.log('║              Install Summary             ║');
-  console.log('╠══════════════════════════════════════════╣');
-
   const ok  = (v: boolean) => v ? '✔' : '✘';
   const ver = (v: string | null | undefined) => v ? ` (${v})` : '';
 
-  console.log(`║  Node.js        ${ok(nodeResult.success)}${ver(nodeResult.version?.raw).padEnd(26)}║`);
-  console.log(`║  openspec       ${ok(openspecResult.success)}${ver(openspecResult.version?.raw).padEnd(26)}║`);
+  logger.raw('');
+  logger.raw('╔══════════════════════════════════════════╗');
+  logger.raw('║              Install Summary             ║');
+  logger.raw('╠══════════════════════════════════════════╣');
+  logger.raw(`║  Node.js        ${ok(nodeResult.success)}${ver(nodeResult.version?.raw).padEnd(26)}║`);
+  logger.raw(`║  openspec       ${ok(openspecResult.success)}${ver(openspecResult.version?.raw).padEnd(26)}║`);
 
   if (claudeSkipped) {
-    console.log('║  tapd-api       - (Claude not installed)  ║');
-    console.log('║  confluence-mcp - (Claude not installed)  ║');
+    logger.raw('║  tapd-api       - (Claude not installed)  ║');
+    logger.raw('║  confluence-mcp - (Claude not installed)  ║');
   } else if (integrationResult) {
     const skillToken = integrationResult.skill.tokenConfigured ? ' token:✔' : ' token:✘';
-    const mcpCred    = integrationResult.mcp.envConfigured     ? ' cred:✔'  : ' cred:✘';
-    console.log(`║  tapd-api       ${ok(integrationResult.skill.success)}${skillToken.padEnd(26)}║`);
-    console.log(`║  confluence-mcp ${ok(integrationResult.mcp.success)}${mcpCred.padEnd(26)}║`);
+    const mcpStatus  = integrationResult.mcp.success           ? ' http:✔'  : ' http:✘';
+    logger.raw(`║  tapd-api       ${ok(integrationResult.skill.success)}${skillToken.padEnd(26)}║`);
+    logger.raw(`║  confluence-mcp ${ok(integrationResult.mcp.success)}${mcpStatus.padEnd(26)}║`);
   }
 
-  console.log('╚══════════════════════════════════════════╝');
+  logger.raw('╚══════════════════════════════════════════╝');
 
-  const hasWarnings =
-    nodeResult.warnings.length > 0 ||
-    openspecResult.warnings.length > 0 ||
-    (integrationResult?.skill.warnings.length ?? 0) > 0 ||
-    (integrationResult?.mcp.warnings.length   ?? 0) > 0;
+  // Pending actions
+  const allWarnings = [
+    ...nodeResult.warnings,
+    ...openspecResult.warnings,
+    ...(integrationResult?.skill.warnings ?? []),
+    ...(integrationResult?.mcp.warnings   ?? []),
+  ];
 
-  if (hasWarnings) {
-    console.log('\nPending actions:');
-    for (const w of [
-      ...nodeResult.warnings,
-      ...openspecResult.warnings,
-      ...(integrationResult?.skill.warnings ?? []),
-      ...(integrationResult?.mcp.warnings   ?? []),
-    ]) {
-      console.log(`  • ${w}`);
+  if (allWarnings.length > 0) {
+    logger.raw('');
+    logger.raw('Pending actions:');
+    for (const w of allWarnings) {
+      logger.warn(`  • ${w}`);
     }
   }
 
-  console.log('\n  Done. Run `openspec --help` to get started.\n');
+  logger.raw('');
+  logger.ok(`Done. Run \`openspec --help\` to get started.`);
+  logger.raw(`Log saved to: ${logger.logFilePath()}`);
+  logger.raw('');
 }
 
 // ─────────────────────────────────────────────
@@ -199,6 +193,7 @@ function printSummary({
 // ─────────────────────────────────────────────
 
 main().catch(err => {
-  console.error('\n[fatal]', err instanceof Error ? err.message : String(err));
+  logger.error(`[fatal] ${err instanceof Error ? err.message : String(err)}`);
+  logger.raw(`Log saved to: ${logger.logFilePath()}`);
   process.exit(1);
 });

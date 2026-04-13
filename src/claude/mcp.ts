@@ -30,6 +30,7 @@
 import * as fs   from 'fs';
 import * as path from 'path';
 import type { ClaudeInfo } from '../detect/claude';
+import { logger } from '../logger';
 
 // ─────────────────────────────────────────────
 // Constants

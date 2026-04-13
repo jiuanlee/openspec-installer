@@ -32,6 +32,7 @@ import * as fs   from 'fs';
 import * as path from 'path';
 import * as readline from 'readline';
 import type { ClaudeInfo } from '../detect/claude';
+import { logger } from '../logger';
 
 // ─────────────────────────────────────────────
 // Constants
@@ -161,8 +162,8 @@ function promptForToken(): Promise<string | null> {
       output: process.stdout,
     });
 
-    console.log('\n[tapd-api] TAPD API token not found.');
-    console.log('  Get yours at: https://www.tapd.cn/tapd_api_token/token');
+    logger.warn('\n[tapd-api] TAPD API token not found.');
+    logger.info('  Get yours at: https://www.tapd.cn/tapd_api_token/token');
     rl.question('  Enter API token (leave blank to skip): ', answer => {
       rl.close();
       const token = answer.trim();
@@ -439,7 +440,7 @@ export async function injectTapdSkill(
     if (!resolvedToken) {
       resolvedToken = process.env['TAPD_API_TOKEN'] ?? null;
       if (resolvedToken) {
-        console.log('[tapd-api] Using TAPD_API_TOKEN environment variable.');
+        logger.info('[tapd-api] Using TAPD_API_TOKEN environment variable.');
       }
     }
 
@@ -453,7 +454,7 @@ export async function injectTapdSkill(
         writeTokenConfig(skillDir, resolvedToken);
         tokenConfigured = true;
         copyResult.filesWritten.push('config.json');
-        console.log('[tapd-api] API token saved to config.json.');
+        logger.ok('[tapd-api] API token saved to config.json.');
       } catch (err) {
         warnings.push(
           `Could not write config.json: ${(err as Error).message}. ` +

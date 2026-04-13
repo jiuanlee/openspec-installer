@@ -26,6 +26,7 @@ import { execSync, spawn } from 'child_process';
 import * as path from 'path';
 import * as os from 'os';
 import type { OsInfo } from '../detect/os';
+import { logger } from '../logger';
 
 // ─────────────────────────────────────────────
 // Constants
@@ -201,7 +202,7 @@ export function detectNodeVersion(): NodeVersionInfo | null {
  * that satisfies the version floor.
  */
 async function installViaWinget(): Promise<CommandResult> {
-  console.log('[node:winget] Installing Node.js via winget …');
+  logger.info('[node:winget] Installing Node.js via winget …');
   // --accept-* flags suppress interactive prompts in automated context
   return runCommand('winget', [
     'install',
@@ -220,7 +221,7 @@ async function installViaWinget(): Promise<CommandResult> {
  * Falls back to `brew upgrade node@22` when already present but outdated.
  */
 async function installViaBrew(): Promise<CommandResult> {
-  console.log('[node:brew] Installing Node.js via Homebrew …');
+  logger.info('[node:brew] Installing Node.js via Homebrew …');
 
   // Check if already installed (but wrong version) → upgrade instead
   const formulaInstalled = probe('brew list --formula node@22') !== null;
@@ -230,7 +231,7 @@ async function installViaBrew(): Promise<CommandResult> {
   if (!installResult.ok) return installResult;
 
   // `brew install node@22` is keg-only — must link explicitly
-  console.log('[node:brew] Linking node@22 …');
+  logger.info('[node:brew] Linking node@22 …');
   return runCommand('brew', ['link', '--overwrite', '--force', `node@${NODE_TARGET_MAJOR}`]);
 }
 
@@ -246,7 +247,7 @@ async function installViaBrew(): Promise<CommandResult> {
  * won't see it until reloaded. We inform the user via a warning.
  */
 async function installViaNvm(osInfo: OsInfo): Promise<CommandResult> {
-  console.log('[node:nvm] Setting up nvm …');
+  logger.info('[node:nvm] Setting up nvm …');
 
   const nvmDir = process.env['NVM_DIR'] ?? path.join(osInfo.homeDir, '.nvm');
   const nvmScript = path.join(nvmDir, 'nvm.sh');
@@ -255,7 +256,7 @@ async function installViaNvm(osInfo: OsInfo): Promise<CommandResult> {
   const nvmExists = probe(`bash -c "[ -f ${nvmScript} ] && echo yes"`) === 'yes';
 
   if (!nvmExists) {
-    console.log(`[node:nvm] Bootstrapping nvm v${NVM_VERSION} …`);
+    logger.info(`[node:nvm] Bootstrapping nvm v${NVM_VERSION} …`);
     const bootstrapUrl =
       `https://raw.githubusercontent.com/nvm-sh/nvm/v${NVM_VERSION}/install.sh`;
     const bootstrapResult = await runCommand('bash', ['-c', `curl -o- ${bootstrapUrl} | bash`], {
@@ -269,7 +270,7 @@ async function installViaNvm(osInfo: OsInfo): Promise<CommandResult> {
   const nvmCmd = (subcommand: string) =>
     `bash -c ". ${nvmScript} && ${subcommand}"`;
 
-  console.log(`[node:nvm] nvm install ${NODE_TARGET_MAJOR} …`);
+  logger.info(`[node:nvm] nvm install ${NODE_TARGET_MAJOR} …`);
   const installResult = await runCommand('bash', [
     '-c',
     `. "${nvmScript}" && nvm install ${NODE_TARGET_MAJOR} && nvm use ${NODE_TARGET_MAJOR} && nvm alias default ${NODE_TARGET_MAJOR}`,
@@ -327,12 +328,12 @@ export async function ensureNode(osInfo: OsInfo): Promise<NodeInstallResult> {
   }
 
   if (existing) {
-    console.log(
+    logger.warn(
       `[node] Found Node.js ${existing.raw} (major: ${existing.major}), ` +
       `needs upgrade to >= ${NODE_TARGET_MAJOR}.`
     );
   } else {
-    console.log('[node] Node.js not found — proceeding with installation.');
+    logger.info('[node] Node.js not found — proceeding with installation.');
   }
 
   // ── Step 2: Select & run install strategy ───────────────────────────
@@ -367,7 +368,7 @@ export async function ensureNode(osInfo: OsInfo): Promise<NodeInstallResult> {
 
     if (!cmdResult.ok) {
       // Homebrew failed — try nvm as macOS fallback
-      console.warn('[node:brew] Homebrew install failed — falling back to nvm …');
+      logger.warn('[node:brew] Homebrew install failed — falling back to nvm …');
       method    = 'nvm';
       cmdResult = await installViaNvm(osInfo);
     }

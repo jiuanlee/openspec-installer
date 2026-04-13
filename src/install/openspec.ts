@@ -19,6 +19,7 @@
 
 import { execSync, spawn } from 'child_process';
 import type { OsInfo } from '../detect/os';
+import { logger } from '../logger';
 
 // ─────────────────────────────────────────────
 // Constants
@@ -270,7 +271,7 @@ export async function ensureOpenspec(
   const isUpgrade = previousVersion !== null;
   const label     = isUpgrade ? 'Upgrading' : 'Installing';
 
-  console.log(
+  logger.info(
     `[openspec:npm] ${label} ${PACKAGE_NAME} globally` +
     (opts.registry ? ` (registry: ${opts.registry})` : '') + ' …'
   );
