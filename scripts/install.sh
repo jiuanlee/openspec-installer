@@ -273,9 +273,9 @@ run_installer() {
   section "Running openspec-installer"
   info "Passing through environment variables …"
 
-  # Forward all recognised env vars to the installer process
-  # (installer reads these directly from process.env)
-  openspec-installer
+  # Forward all recognised env vars and any extra flags to the installer
+  # Usage: bash install.sh [--force] [--force-skill] [--skip-node] …
+  openspec-installer "$@"
 }
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
@@ -287,7 +287,7 @@ main() {
   detect_os
   ensure_node
   install_openspec_installer
-  run_installer
+  run_installer "$@"
 
   printf "\n${GREEN}${BOLD}All done!${RESET} Run 'openspec --help' to get started.\n\n"
 }

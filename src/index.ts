@@ -5,21 +5,20 @@
  * Orchestration (phases run in strict order; each phase gate-checks the previous):
  *
  *  Phase 1 ── Detection (synchronous, always runs)
- *               ├─ detectOs()      → OsInfo    (platform / arch / homeDir / claudeConfigDir)
- *               └─ detectClaude()  → ClaudeInfo (binary / version / skills / mcpServers)
+ *               ├─ detectOs()      → OsInfo
+ *               └─ detectClaude()  → ClaudeInfo
  *
  *  Phase 2 ── Installation (async, fails-fast)
- *               ├─ ensureNode()    → NodeInstallResult    (winget | brew | nvm)
- *               └─ ensureOpenspec()→ OpenspecInstallResult (npm install -g)
+ *               ├─ ensureNode()     → skipped when --skip-node
+ *               └─ ensureOpenspec() → skipped when --skip-openspec
+ *                                     force-reinstalled when --force-openspec / --force
  *
- *  Phase 3 ── Claude Code Integration (async, skipped when Claude not installed)
- *               ├─ injectTapdSkill()       → writes ~/.claude/skills/tapd-api/
- *               └─ registerConfluenceMcp() → writes ~/.claude/settings.json (HTTP mode)
+ *  Phase 3 ── Claude Code Integration (skipped when --skip-claude or Claude not installed)
+ *               ├─ injectTapdSkill()       → force when --force-skill / --force
+ *               └─ registerConfluenceMcp() → force when --force-mcp  / --force
  *
- * Environment variables consumed at runtime:
- *   OPENSPEC_NPM_REGISTRY  custom npm registry for openspec install (optional)
- *   TAPD_API_TOKEN         TAPD personal API token — skips interactive prompt
- *   LOG_LEVEL              debug | info | warn | error | silent  (default: info)
+ * Flags:   see `openspec-installer --help`
+ * Env vars: TAPD_API_TOKEN, OPENSPEC_NPM_REGISTRY, LOG_LEVEL
  */
 
 import { detectOs, formatOsInfo, assertSupportedArch } from './detect/os';
@@ -32,6 +31,7 @@ import {
   formatMcpResult,
 } from './claude';
 import { logger } from './logger';
+import { parseArgs } from './cli';
 
 // ─────────────────────────────────────────────
 // Helpers
@@ -47,10 +47,17 @@ function env(key: string): string | undefined {
 // ─────────────────────────────────────────────
 
 async function main(): Promise<void> {
+  // ── Parse CLI args (exits early on --help / --version) ───────────────
+  const args = parseArgs();
+
   logger.raw('');
   logger.raw('╔══════════════════════════════════════════╗');
   logger.raw('║         openspec-installer v1.0.0        ║');
   logger.raw('╚══════════════════════════════════════════╝');
+
+  if (args.force) {
+    logger.warn('--force enabled: all components will be reinstalled.');
+  }
 
   // ────────────────────────────────────────────
   // Phase 1 — Detection
@@ -73,45 +80,65 @@ async function main(): Promise<void> {
   // ────────────────────────────────────────────
   // Phase 2 — Installation
   // ────────────────────────────────────────────
+
+  // ── Node.js ──────────────────────────────────────────────────────────
   logger.section('Phase 2 · Install Node.js >= 22');
 
-  const nodeResult = await ensureNode(osInfo);
-  logger.raw(formatNodeResult(nodeResult));
-
-  if (!nodeResult.success) {
-    logger.error('Node.js >= 22 is required. Aborting.');
-    process.exit(1);
+  if (args.skipNode) {
+    logger.info('--skip-node: skipping Node.js check.');
+  } else {
+    const nodeResult = await ensureNode(osInfo);
+    logger.raw(formatNodeResult(nodeResult));
+    if (!nodeResult.success) {
+      logger.error('Node.js >= 22 is required. Aborting.');
+      process.exit(1);
+    }
   }
 
+  // ── openspec ─────────────────────────────────────────────────────────
   logger.section('Phase 2 · Install openspec');
 
-  const openspecResult = await ensureOpenspec(osInfo, {
-    registry: env('OPENSPEC_NPM_REGISTRY'),
-  });
-  logger.raw(formatOpenspecResult(openspecResult));
-
-  if (!openspecResult.success) {
-    logger.error('openspec installation failed. Aborting.');
-    process.exit(1);
+  if (args.skipOpenspec) {
+    logger.info('--skip-openspec: skipping openspec install.');
+  } else {
+    const openspecResult = await ensureOpenspec(osInfo, {
+      registry: env('OPENSPEC_NPM_REGISTRY'),
+      force:    args.forceOpenspec,
+    });
+    logger.raw(formatOpenspecResult(openspecResult));
+    if (!openspecResult.success) {
+      logger.error('openspec installation failed. Aborting.');
+      process.exit(1);
+    }
   }
 
   // ────────────────────────────────────────────
   // Phase 3 — Claude Code Integration
   // ────────────────────────────────────────────
-  if (!claudeInfo.installed) {
-    logger.warn('Phase 3 skipped — Claude Code not installed.');
-    printSummary({ nodeResult, openspecResult, claudeSkipped: true });
+  if (args.skipClaude || !claudeInfo.installed) {
+    if (args.skipClaude) {
+      logger.info('--skip-claude: skipping Phase 3.');
+    } else {
+      logger.warn('Phase 3 skipped — Claude Code not installed.');
+    }
+    printSummary({ claudeSkipped: true });
     return;
   }
 
   logger.section('Phase 3 · Claude Code Integration');
 
+  if (args.forceSkill)  logger.warn('--force-skill: tapd-api will be reinstalled.');
+  if (args.forceMcp)    logger.warn('--force-mcp: confluence-mcp will be re-registered.');
+
   const integrationResult = await runClaudeIntegration(claudeInfo, {
     skill: {
+      force:          args.forceSkill,
       promptForToken: true,
       token:          env('TAPD_API_TOKEN'),
     },
-    mcp: {},
+    mcp: {
+      force: args.forceMcp,
+    },
   });
 
   logger.raw(formatSkillResult(integrationResult.skill));
@@ -121,10 +148,7 @@ async function main(): Promise<void> {
     logger.warn('One or more Phase 3 steps failed — see warnings above.');
   }
 
-  // ────────────────────────────────────────────
-  // Final summary
-  // ────────────────────────────────────────────
-  printSummary({ nodeResult, openspecResult, integrationResult, claudeSkipped: false });
+  printSummary({ integrationResult, claudeSkipped: false });
 }
 
 // ─────────────────────────────────────────────
@@ -132,31 +156,21 @@ async function main(): Promise<void> {
 // ─────────────────────────────────────────────
 
 interface SummaryArgs {
-  nodeResult:         Awaited<ReturnType<typeof ensureNode>>;
-  openspecResult:     Awaited<ReturnType<typeof ensureOpenspec>>;
   integrationResult?: Awaited<ReturnType<typeof runClaudeIntegration>>;
   claudeSkipped:      boolean;
 }
 
-function printSummary({
-  nodeResult,
-  openspecResult,
-  integrationResult,
-  claudeSkipped,
-}: SummaryArgs): void {
-  const ok  = (v: boolean) => v ? '✔' : '✘';
-  const ver = (v: string | null | undefined) => v ? ` (${v})` : '';
+function printSummary({ integrationResult, claudeSkipped }: SummaryArgs): void {
+  const ok = (v: boolean) => v ? '✔' : '✘';
 
   logger.raw('');
   logger.raw('╔══════════════════════════════════════════╗');
   logger.raw('║              Install Summary             ║');
   logger.raw('╠══════════════════════════════════════════╣');
-  logger.raw(`║  Node.js        ${ok(nodeResult.success)}${ver(nodeResult.version?.raw).padEnd(26)}║`);
-  logger.raw(`║  openspec       ${ok(openspecResult.success)}${ver(openspecResult.version?.raw).padEnd(26)}║`);
 
   if (claudeSkipped) {
-    logger.raw('║  tapd-api       - (Claude not installed)  ║');
-    logger.raw('║  confluence-mcp - (Claude not installed)  ║');
+    logger.raw('║  tapd-api       - (skipped)               ║');
+    logger.raw('║  confluence-mcp - (skipped)               ║');
   } else if (integrationResult) {
     const skillToken = integrationResult.skill.tokenConfigured ? ' token:✔' : ' token:✘';
     const mcpStatus  = integrationResult.mcp.success           ? ' http:✔'  : ' http:✘';
@@ -166,10 +180,7 @@ function printSummary({
 
   logger.raw('╚══════════════════════════════════════════╝');
 
-  // Pending actions
   const allWarnings = [
-    ...nodeResult.warnings,
-    ...openspecResult.warnings,
     ...(integrationResult?.skill.warnings ?? []),
     ...(integrationResult?.mcp.warnings   ?? []),
   ];
@@ -183,7 +194,7 @@ function printSummary({
   }
 
   logger.raw('');
-  logger.ok(`Done. Run \`openspec --help\` to get started.`);
+  logger.ok('Done. Run `openspec --help` to get started.');
   logger.raw(`Log saved to: ${logger.logFilePath()}`);
   logger.raw('');
 }
