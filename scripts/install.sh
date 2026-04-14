@@ -51,6 +51,28 @@ readonly NVM_VERSION="0.39.7"
 readonly NVM_INSTALL_URL="https://raw.githubusercontent.com/nvm-sh/nvm/v${NVM_VERSION}/install.sh"
 readonly SCRIPT_VERSION="1.0.0"
 
+# ─── Log file ────────────────────────────────────────────────────────────────
+# All output is tee'd to this file for debugging / audit.
+readonly LOG_DIR="${HOME}/.openspec-installer"
+readonly LOG_FILE="${LOG_DIR}/bootstrap.log"
+
+# ─── Log file helpers ─────────────────────────────────────────────────────────
+init_log() {
+  mkdir -p "$LOG_DIR" 2>/dev/null || true
+  local ts; ts=$(date -u +"%Y-%m-%dT%H:%M:%S")
+  {
+    echo ""
+    echo "$(printf '─%.0s' {1..72})"
+    echo "$ts [START] openspec-installer bootstrap v$SCRIPT_VERSION"
+  } >> "$LOG_FILE"
+}
+
+write_log() {
+  local level="$1"; shift
+  local ts; ts=$(date -u +"%Y-%m-%dT%H:%M:%S")
+  echo "$ts [${level}] $*" >> "$LOG_FILE"
+}
+
 # ─── Colour helpers ───────────────────────────────────────────────────────────
 # Disable colours when not writing to a terminal
 if [ -t 1 ]; then
@@ -60,11 +82,11 @@ else
   RED=''; YELLOW=''; GREEN=''; CYAN=''; BOLD=''; RESET=''
 fi
 
-info()    { printf "${CYAN}[info]${RESET}  %s\n" "$*"; }
-success() { printf "${GREEN}[ok]${RESET}    %s\n" "$*"; }
-warn()    { printf "${YELLOW}[warn]${RESET}  %s\n" "$*" >&2; }
-fatal()   { printf "${RED}[fatal]${RESET} %s\n" "$*" >&2; exit 1; }
-section() { printf "\n${BOLD}── %s ──${RESET}\n" "$*"; }
+info()    { printf "${CYAN}[info]${RESET}  %s\n" "$*"; write_log 'INFO' "$*"; }
+success() { printf "${GREEN}[ok]${RESET}    %s\n" "$*"; write_log 'OK' "$*"; }
+warn()    { printf "${YELLOW}[warn]${RESET}  %s\n" "$*" >&2; write_log 'WARN' "$*"; }
+fatal()   { printf "${RED}[fatal]${RESET} %s\n" "$*" >&2; write_log 'FATAL' "$*"; exit 1; }
+section() { printf "\n${BOLD}── %s ──${RESET}\n" "$*"; write_log 'INFO' "── $* ──"; }
 
 # ─── OS / arch detection ──────────────────────────────────────────────────────
 detect_os() {
@@ -258,7 +280,15 @@ install_openspec_installer() {
   fi
 
   info "Running: npm ${npm_args[*]} …"
-  npm "${npm_args[@]}"
+  write_log 'RUN' "npm ${npm_args[*]}"
+
+  # Run npm and tee output to log file
+  if npm "${npm_args[@]}" 2>&1 | tee -a "$LOG_FILE"; then
+    : # success
+  else
+    warn "npm install failed. Check log for details: $LOG_FILE"
+    fatal "Cannot continue — npm install error."
+  fi
 
   if ! has_cmd openspec-installer; then
     warn "openspec-installer installed but not found on PATH."
@@ -281,16 +311,21 @@ run_installer() {
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
 main() {
+  init_log
+
   printf "\n${BOLD}╔══════════════════════════════════════════╗${RESET}\n"
   printf "${BOLD}║    openspec-installer bootstrap v%s    ║${RESET}\n" "$SCRIPT_VERSION"
   printf "${BOLD}╚══════════════════════════════════════════╝${RESET}\n\n"
+  info "Log file: $LOG_FILE"
 
   detect_os
   ensure_node
   install_openspec_installer
   run_installer "$@"
 
-  printf "\n${GREEN}${BOLD}All done!${RESET} Run 'openspec --help' to get started.\n\n"
+  write_log 'OK' "Setup complete."
+  printf "\n${GREEN}${BOLD}All done!${RESET} Run 'openspec --help' to get started.\n"
+  printf "${CYAN}Log saved to: ${LOG_FILE}${RESET}\n\n"
 }
 
 main "$@"
