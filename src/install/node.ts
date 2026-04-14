@@ -322,7 +322,7 @@ export async function ensureNode(osInfo: OsInfo): Promise<NodeInstallResult> {
       success: true,
       method:  'already-installed',
       version: existing,
-      summary: `Node.js ${existing.raw} already satisfies >= ${NODE_TARGET_MAJOR}.x — skipping install.`,
+      summary: `Node.js ${existing.raw} already satisfies >= ${NODE_TARGET_MAJOR}.x - skipping install.`,
       warnings,
     };
   }
@@ -451,9 +451,9 @@ export async function ensureNode(osInfo: OsInfo): Promise<NodeInstallResult> {
  * Pretty-print a NodeInstallResult for CLI output.
  */
 export function formatNodeResult(result: NodeInstallResult): string {
-  const status  = result.success ? '✔' : '✘';
+  const status  = result.success ? '[ok]' : '[x]';
   const version = result.version ? ` (${result.version.raw})` : '';
-  const lines   = [`${status} node${version} — ${result.summary}`];
+  const lines   = [`${status} node${version} - ${result.summary}`];
   for (const w of result.warnings) {
     lines.push(`  [warn] ${w}`);
   }

@@ -185,7 +185,7 @@ async function ensureOpenspec(osInfo, opts = {}) {
             status: 'already-installed',
             version: previousVersion,
             previousVersion,
-            summary: `openspec ${previousVersion.raw} is already installed — skipping.`,
+            summary: `openspec ${previousVersion.raw} is already installed - skipping.`,
             warnings,
         };
     }
@@ -239,7 +239,7 @@ async function ensureOpenspec(osInfo, opts = {}) {
         version: installed,
         previousVersion,
         summary: isUpgrade
-            ? `openspec upgraded from ${previousVersion.raw} → ${installed.raw}.`
+            ? `openspec upgraded from ${previousVersion.raw} -> ${installed.raw}.`
             : `openspec ${installed.raw} installed successfully.`,
         warnings,
     };
@@ -266,9 +266,9 @@ function buildNpmErrorHint(stderr, opts) {
  * Pretty-print an OpenspecInstallResult for CLI output.
  */
 function formatOpenspecResult(result) {
-    const status = result.success ? '✔' : '✘';
+    const status = result.success ? '[ok]' : '[x]';
     const version = result.version ? ` (${result.version.raw})` : '';
-    const lines = [`${status} openspec${version} — ${result.summary}`];
+    const lines = [`${status} openspec${version} - ${result.summary}`];
     for (const w of result.warnings) {
         lines.push(`  [warn] ${w}`);
     }

@@ -143,7 +143,7 @@ export async function registerConfluenceMcp(
       success:      true,
       status:       'already-registered',
       settingsFile,
-      summary:      `confluence-mcp 已注册（HTTP 模式）— 跳过。如需更新请使用 force=true。`,
+      summary:      `confluence-mcp registered (HTTP mode) - skipped. Use force=true to update.`,
       warnings,
     };
   }
@@ -173,7 +173,7 @@ export async function registerConfluenceMcp(
     status,
     settingsFile,
     summary:
-      `confluence-mcp ${status === 'registered' ? '注册成功' : '已更新'}（HTTP 模式）→ ${MCP_HTTP_URL}`,
+      `confluence-mcp ${status === 'registered' ? '注册成功' : '已更新'}（HTTP 模式）-> ${MCP_HTTP_URL}`,
     warnings,
   };
 }
@@ -182,8 +182,8 @@ export async function registerConfluenceMcp(
  * 格式化 McpInstallResult 用于 CLI 输出。
  */
 export function formatMcpResult(result: McpInstallResult): string {
-  const icon  = result.success ? '✔' : '✘';
-  const lines = [`${icon} confluence-mcp — ${result.summary}`];
+  const icon  = result.success ? '[ok]' : '[x]';
+  const lines = [`${icon} confluence-mcp - ${result.summary}`];
   for (const w of result.warnings) {
     lines.push(`  [warn] ${w}`);
   }

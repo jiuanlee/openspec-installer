@@ -385,7 +385,7 @@ export async function injectTapdSkill(
       filesWritten:    [],
       filesSkipped:    SKILL_ASSET_FILES.slice(),
       tokenConfigured,
-      summary:         `tapd-api skill already installed at ${skillDir} — skipping (use force=true to overwrite).`,
+      summary:         `tapd-api skill already installed at ${skillDir} - skipping (use force=true to overwrite).`,
       warnings:        tokenConfigured ? [] : [
         'tapd-api has no API token configured. Run `python ~/.claude/skills/tapd-api/setup.py` to add one.',
       ],
@@ -493,9 +493,9 @@ const promptForToken_ = promptForToken;
  * Pretty-print a SkillInstallResult for CLI output.
  */
 export function formatSkillResult(result: SkillInstallResult): string {
-  const status = result.success ? '✔' : '✘';
-  const token  = result.tokenConfigured ? 'token: ✔' : 'token: ✘ (needs setup)';
-  const lines  = [`${status} tapd-api — ${result.summary} | ${token}`];
+  const status = result.success ? '[ok]' : '[x]';
+  const token  = result.tokenConfigured ? 'token: [ok]' : 'token: [x] (needs setup)';
+  const lines  = [`${status} tapd-api - ${result.summary} | ${token}`];
   for (const w of result.warnings) {
     lines.push(`  [warn] ${w}`);
   }

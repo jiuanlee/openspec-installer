@@ -51,9 +51,9 @@ async function main(): Promise<void> {
   const args = parseArgs();
 
   logger.raw('');
-  logger.raw('╔══════════════════════════════════════════╗');
-  logger.raw('║         openspec-installer v1.0.0        ║');
-  logger.raw('╚══════════════════════════════════════════╝');
+  logger.raw('+==========================================+');
+  logger.raw('|         openspec-installer v1.0.0        |');
+  logger.raw('+==========================================+');
 
   if (args.force) {
     logger.warn('--force enabled: all components will be reinstalled.');
@@ -62,7 +62,7 @@ async function main(): Promise<void> {
   // ────────────────────────────────────────────
   // Phase 1 — Detection
   // ────────────────────────────────────────────
-  logger.section('Phase 1 · Detection');
+  logger.section('Phase 1 - Detection');
 
   const osInfo = detectOs();
   logger.info(formatOsInfo(osInfo));
@@ -82,7 +82,7 @@ async function main(): Promise<void> {
   // ────────────────────────────────────────────
 
   // ── Node.js ──────────────────────────────────────────────────────────
-  logger.section('Phase 2 · Install Node.js >= 22');
+  logger.section('Phase 2 - Install Node.js >= 22');
 
   if (args.skipNode) {
     logger.info('--skip-node: skipping Node.js check.');
@@ -96,7 +96,7 @@ async function main(): Promise<void> {
   }
 
   // ── openspec ─────────────────────────────────────────────────────────
-  logger.section('Phase 2 · Install openspec');
+  logger.section('Phase 2 - Install openspec');
 
   if (args.skipOpenspec) {
     logger.info('--skip-openspec: skipping openspec install.');
@@ -119,13 +119,13 @@ async function main(): Promise<void> {
     if (args.skipClaude) {
       logger.info('--skip-claude: skipping Phase 3.');
     } else {
-      logger.warn('Phase 3 skipped — Claude Code not installed.');
+      logger.warn('Phase 3 skipped - Claude Code not installed.');
     }
     printSummary({ claudeSkipped: true });
     return;
   }
 
-  logger.section('Phase 3 · Claude Code Integration');
+  logger.section('Phase 3 - Claude Code Integration');
 
   if (args.forceSkill)  logger.warn('--force-skill: tapd-api will be reinstalled.');
   if (args.forceMcp)    logger.warn('--force-mcp: confluence-mcp will be re-registered.');
@@ -145,7 +145,7 @@ async function main(): Promise<void> {
   logger.raw(formatMcpResult(integrationResult.mcp));
 
   if (!integrationResult.allSuccess) {
-    logger.warn('One or more Phase 3 steps failed — see warnings above.');
+    logger.warn('One or more Phase 3 steps failed - see warnings above.');
   }
 
   printSummary({ integrationResult, claudeSkipped: false });
@@ -161,24 +161,24 @@ interface SummaryArgs {
 }
 
 function printSummary({ integrationResult, claudeSkipped }: SummaryArgs): void {
-  const ok = (v: boolean) => v ? '✔' : '✘';
+  const ok = (v: boolean) => v ? '[ok]' : '[x]';
 
   logger.raw('');
-  logger.raw('╔══════════════════════════════════════════╗');
-  logger.raw('║              Install Summary             ║');
-  logger.raw('╠══════════════════════════════════════════╣');
+  logger.raw('+==========================================+');
+  logger.raw('|              Install Summary             |');
+  logger.raw('+==========================================+');
 
   if (claudeSkipped) {
-    logger.raw('║  tapd-api       - (skipped)               ║');
-    logger.raw('║  confluence-mcp - (skipped)               ║');
+    logger.raw('|  tapd-api       - (skipped)               |');
+    logger.raw('|  confluence-mcp - (skipped)               |');
   } else if (integrationResult) {
-    const skillToken = integrationResult.skill.tokenConfigured ? ' token:✔' : ' token:✘';
-    const mcpStatus  = integrationResult.mcp.success           ? ' http:✔'  : ' http:✘';
-    logger.raw(`║  tapd-api       ${ok(integrationResult.skill.success)}${skillToken.padEnd(26)}║`);
-    logger.raw(`║  confluence-mcp ${ok(integrationResult.mcp.success)}${mcpStatus.padEnd(26)}║`);
+    const skillToken = integrationResult.skill.tokenConfigured ? ' token:[ok]' : ' token:[x]';
+    const mcpStatus  = integrationResult.mcp.success           ? ' http:[ok]'  : ' http:[x]';
+    logger.raw(`|  tapd-api       ${ok(integrationResult.skill.success)}${skillToken.padEnd(26)}|`);
+    logger.raw(`|  confluence-mcp ${ok(integrationResult.mcp.success)}${mcpStatus.padEnd(26)}|`);
   }
 
-  logger.raw('╚══════════════════════════════════════════╝');
+  logger.raw('+==========================================+');
 
   const allWarnings = [
     ...(integrationResult?.skill.warnings ?? []),
@@ -189,7 +189,7 @@ function printSummary({ integrationResult, claudeSkipped }: SummaryArgs): void {
     logger.raw('');
     logger.raw('Pending actions:');
     for (const w of allWarnings) {
-      logger.warn(`  • ${w}`);
+      logger.warn(`  - ${w}`);
     }
   }
 

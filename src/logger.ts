@@ -101,7 +101,7 @@ class Logger {
 
     // Write session header to log file
     appendToFile('');
-    appendToFile('─'.repeat(72));
+    appendToFile('-'.repeat(72));
     appendToFile(`${filePrefix('info')}openspec-installer started`);
     appendToFile(`${filePrefix('info')}log level: ${this.level}`);
   }
@@ -152,7 +152,7 @@ class Logger {
 
   /** Section banner */
   section(title: string): void {
-    const line = `${C.bold}── ${title} ──${C.reset}`;
+    const line = `${C.bold}-- ${title} --${C.reset}`;
     this.raw('');
     this.raw(line);
   }

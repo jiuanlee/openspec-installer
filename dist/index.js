@@ -43,16 +43,16 @@ async function main() {
     // ── Parse CLI args (exits early on --help / --version) ───────────────
     const args = (0, cli_1.parseArgs)();
     logger_1.logger.raw('');
-    logger_1.logger.raw('╔══════════════════════════════════════════╗');
-    logger_1.logger.raw('║         openspec-installer v1.0.0        ║');
-    logger_1.logger.raw('╚══════════════════════════════════════════╝');
+    logger_1.logger.raw('+==========================================+');
+    logger_1.logger.raw('|         openspec-installer v1.0.0        |');
+    logger_1.logger.raw('+==========================================+');
     if (args.force) {
         logger_1.logger.warn('--force enabled: all components will be reinstalled.');
     }
     // ────────────────────────────────────────────
     // Phase 1 — Detection
     // ────────────────────────────────────────────
-    logger_1.logger.section('Phase 1 · Detection');
+    logger_1.logger.section('Phase 1 - Detection');
     const osInfo = (0, os_1.detectOs)();
     logger_1.logger.info((0, os_1.formatOsInfo)(osInfo));
     (0, os_1.assertSupportedArch)(osInfo);
@@ -67,7 +67,7 @@ async function main() {
     // Phase 2 — Installation
     // ────────────────────────────────────────────
     // ── Node.js ──────────────────────────────────────────────────────────
-    logger_1.logger.section('Phase 2 · Install Node.js >= 22');
+    logger_1.logger.section('Phase 2 - Install Node.js >= 22');
     if (args.skipNode) {
         logger_1.logger.info('--skip-node: skipping Node.js check.');
     }
@@ -80,7 +80,7 @@ async function main() {
         }
     }
     // ── openspec ─────────────────────────────────────────────────────────
-    logger_1.logger.section('Phase 2 · Install openspec');
+    logger_1.logger.section('Phase 2 - Install openspec');
     if (args.skipOpenspec) {
         logger_1.logger.info('--skip-openspec: skipping openspec install.');
     }
@@ -103,12 +103,12 @@ async function main() {
             logger_1.logger.info('--skip-claude: skipping Phase 3.');
         }
         else {
-            logger_1.logger.warn('Phase 3 skipped — Claude Code not installed.');
+            logger_1.logger.warn('Phase 3 skipped - Claude Code not installed.');
         }
         printSummary({ claudeSkipped: true });
         return;
     }
-    logger_1.logger.section('Phase 3 · Claude Code Integration');
+    logger_1.logger.section('Phase 3 - Claude Code Integration');
     if (args.forceSkill)
         logger_1.logger.warn('--force-skill: tapd-api will be reinstalled.');
     if (args.forceMcp)
@@ -126,27 +126,27 @@ async function main() {
     logger_1.logger.raw((0, claude_2.formatSkillResult)(integrationResult.skill));
     logger_1.logger.raw((0, claude_2.formatMcpResult)(integrationResult.mcp));
     if (!integrationResult.allSuccess) {
-        logger_1.logger.warn('One or more Phase 3 steps failed — see warnings above.');
+        logger_1.logger.warn('One or more Phase 3 steps failed - see warnings above.');
     }
     printSummary({ integrationResult, claudeSkipped: false });
 }
 function printSummary({ integrationResult, claudeSkipped }) {
-    const ok = (v) => v ? '✔' : '✘';
+    const ok = (v) => v ? '[ok]' : '[x]';
     logger_1.logger.raw('');
-    logger_1.logger.raw('╔══════════════════════════════════════════╗');
-    logger_1.logger.raw('║              Install Summary             ║');
-    logger_1.logger.raw('╠══════════════════════════════════════════╣');
+    logger_1.logger.raw('+==========================================+');
+    logger_1.logger.raw('|              Install Summary             |');
+    logger_1.logger.raw('+==========================================+');
     if (claudeSkipped) {
-        logger_1.logger.raw('║  tapd-api       - (skipped)               ║');
-        logger_1.logger.raw('║  confluence-mcp - (skipped)               ║');
+        logger_1.logger.raw('|  tapd-api       - (skipped)               |');
+        logger_1.logger.raw('|  confluence-mcp - (skipped)               |');
     }
     else if (integrationResult) {
-        const skillToken = integrationResult.skill.tokenConfigured ? ' token:✔' : ' token:✘';
-        const mcpStatus = integrationResult.mcp.success ? ' http:✔' : ' http:✘';
-        logger_1.logger.raw(`║  tapd-api       ${ok(integrationResult.skill.success)}${skillToken.padEnd(26)}║`);
-        logger_1.logger.raw(`║  confluence-mcp ${ok(integrationResult.mcp.success)}${mcpStatus.padEnd(26)}║`);
+        const skillToken = integrationResult.skill.tokenConfigured ? ' token:[ok]' : ' token:[x]';
+        const mcpStatus = integrationResult.mcp.success ? ' http:[ok]' : ' http:[x]';
+        logger_1.logger.raw(`|  tapd-api       ${ok(integrationResult.skill.success)}${skillToken.padEnd(26)}|`);
+        logger_1.logger.raw(`|  confluence-mcp ${ok(integrationResult.mcp.success)}${mcpStatus.padEnd(26)}|`);
     }
-    logger_1.logger.raw('╚══════════════════════════════════════════╝');
+    logger_1.logger.raw('+==========================================+');
     const allWarnings = [
         ...(integrationResult?.skill.warnings ?? []),
         ...(integrationResult?.mcp.warnings ?? []),
@@ -155,7 +155,7 @@ function printSummary({ integrationResult, claudeSkipped }) {
         logger_1.logger.raw('');
         logger_1.logger.raw('Pending actions:');
         for (const w of allWarnings) {
-            logger_1.logger.warn(`  • ${w}`);
+            logger_1.logger.warn(`  - ${w}`);
         }
     }
     logger_1.logger.raw('');
