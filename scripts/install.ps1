@@ -75,15 +75,16 @@ function Init-Log {
         New-Item -ItemType Directory -Path $LOG_DIR -Force | Out-Null
     }
     $ts = Get-Date -Format 'yyyy-MM-ddTHH:mm:ss'
-    Add-Content -Path $LOG_FILE -Value ""
-    Add-Content -Path $LOG_FILE -Value ("─" * 72)
-    Add-Content -Path $LOG_FILE -Value "$ts [START] openspec-installer bootstrap v$SCRIPT_VERSION"
+    # Use UTF8 encoding for log file (PowerShell 5.1 defaults to ASCII)
+    Add-Content -Path $LOG_FILE -Value "" -Encoding UTF8
+    Add-Content -Path $LOG_FILE -Value ("-" * 72) -Encoding UTF8
+    Add-Content -Path $LOG_FILE -Value "$ts [START] openspec-installer bootstrap v$SCRIPT_VERSION" -Encoding UTF8
 }
 
 function Write-Log([string]$Level, [string]$Msg) {
     $ts   = Get-Date -Format 'yyyy-MM-ddTHH:mm:ss'
     $line = "$ts [$($Level.ToUpper().PadRight(5))] $Msg"
-    Add-Content -Path $LOG_FILE -Value $line -ErrorAction SilentlyContinue
+    Add-Content -Path $LOG_FILE -Value $line -Encoding UTF8 -ErrorAction SilentlyContinue
 }
 
 # ── Colour + log helpers ──────────────────────────────────────────────────────
@@ -185,8 +186,8 @@ function Invoke-Command-Logged([string]$Exe, [string[]]$ArgList) {
     $proc.WaitForExit()
 
     # Flush buffered output to log file
-    if ($stdoutBuf.Length -gt 0) { Add-Content -Path $LOG_FILE -Value $stdoutBuf.ToString() -ErrorAction SilentlyContinue }
-    if ($stderrBuf.Length -gt 0) { Add-Content -Path $LOG_FILE -Value ("[STDERR] " + $stderrBuf.ToString()) -ErrorAction SilentlyContinue }
+    if ($stdoutBuf.Length -gt 0) { Add-Content -Path $LOG_FILE -Value $stdoutBuf.ToString() -Encoding UTF8 -ErrorAction SilentlyContinue }
+    if ($stderrBuf.Length -gt 0) { Add-Content -Path $LOG_FILE -Value ("[STDERR] " + $stderrBuf.ToString()) -Encoding UTF8 -ErrorAction SilentlyContinue }
 
     return $proc.ExitCode
 }
