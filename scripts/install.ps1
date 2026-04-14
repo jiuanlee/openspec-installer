@@ -119,29 +119,42 @@ function Write-Fatal([string]$Msg) {
 
 # ── Run a command, stream output live AND write to log ───────────────────────
 # Usage: Invoke-Command-Logged 'npm' @('install','--global','foo')
+#
+# Note: Windows npm is a .cmd file, so we use cmd.exe /c to execute it.
+# This works for both .exe and .cmd/.bat files.
 function Invoke-Command-Logged([string]$Exe, [string[]]$ArgList) {
     Write-Log 'RUN' "$Exe $($ArgList -join ' ')"
 
-    # Resolve full path when UseShellExecute = false (ProcessStartInfo needs absolute path)
-    $resolvedExe = $Exe
-    if (-not [System.IO.Path]::IsPathRooted($Exe)) {
-        $cmd = Get-Command $Exe -ErrorAction SilentlyContinue
-        if ($cmd) {
-            $resolvedExe = $cmd.Source
-            Write-Log 'DEBUG' "Resolved '$Exe' to '$resolvedExe'"
-        } else {
-            Write-Log 'FATAL' "Cannot find command '$Exe' on PATH"
-            return -1
-        }
+    # Resolve full path for logging
+    $resolvedPath = $Exe
+    $cmdInfo = Get-Command $Exe -ErrorAction SilentlyContinue
+    if ($cmdInfo) {
+        $resolvedPath = $cmdInfo.Source
+        Write-Log 'DEBUG' "Resolved '$Exe' to '$resolvedPath'"
+    } else {
+        Write-Log 'FATAL' "Cannot find command '$Exe' on PATH"
+        return -1
+    }
+
+    # Check if it's a .cmd/.bat file — need to run via cmd.exe
+    $ext = [System.IO.Path]::GetExtension($resolvedPath).ToLower()
+    if ($ext -in @('.cmd', '.bat')) {
+        $psiFileName  = 'cmd.exe'
+        $psiArgs      = @('/c', $resolvedPath) + $ArgList
+    } else {
+        $psiFileName  = $resolvedPath
+        $psiArgs      = $ArgList
     }
 
     $psi                        = [System.Diagnostics.ProcessStartInfo]::new()
-    $psi.FileName               = $resolvedExe
-    $psi.Arguments              = $ArgList -join ' '
+    $psi.FileName               = $psiFileName
+    $psi.Arguments              = $psiArgs -join ' '
     $psi.RedirectStandardOutput = $true
     $psi.RedirectStandardError  = $true
     $psi.UseShellExecute        = $false
     $psi.CreateNoWindow         = $false
+
+    Write-Log 'DEBUG' "Executing: $psiFileName $($psiArgs -join ' ')"
 
     $proc = [System.Diagnostics.Process]::new()
     $proc.StartInfo = $psi
