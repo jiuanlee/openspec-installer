@@ -119,68 +119,38 @@ function Invoke-Command-Logged([string]$Exe, [string[]]$ArgList) {
         $resolvedPath = $cmdInfo.Source
         Write-Log 'DEBUG' "Resolved '$Exe' to '$resolvedPath'"
     } else {
+        Write-Warn "Cannot find command '$Exe' on PATH"
         Write-Log 'FATAL' "Cannot find command '$Exe' on PATH"
         return -1
     }
 
-    $ext = [System.IO.Path]::GetExtension($resolvedPath).ToLower()
-    if ($ext -in @('.cmd', '.bat')) {
-        $psiFileName  = 'cmd.exe'
-        $psiArgs      = @('/c', $resolvedPath) + $ArgList
-    } elseif ($ext -eq '.ps1') {
-        $psiFileName  = 'powershell.exe'
-        $psiArgs      = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $resolvedPath) + $ArgList
-    } else {
-        $psiFileName  = $resolvedPath
-        $psiArgs      = $ArgList
-    }
+    Write-Info "Executing: $Exe $($ArgList -join ' ') ..."
 
-    $psi                        = [System.Diagnostics.ProcessStartInfo]::new()
-    $psi.FileName               = $psiFileName
-    $psi.Arguments              = $psiArgs -join ' '
-    $psi.RedirectStandardOutput = $true
-    $psi.RedirectStandardError  = $true
-    $psi.UseShellExecute        = $false
-    $psi.CreateNoWindow         = $false
-    $psi.StandardOutputEncoding = [System.Text.Encoding]::UTF8
-    $psi.StandardErrorEncoding  = [System.Text.Encoding]::UTF8
-
-    Write-Log 'DEBUG' "Executing: $psiFileName $($psiArgs -join ' ')"
-
-    $proc = [System.Diagnostics.Process]::new()
-    $proc.StartInfo = $psi
-
-    $stdoutBuf = [System.Text.StringBuilder]::new()
-    $proc.add_OutputDataReceived({
-        param($s, $e)
-        if ($null -ne $e.Data) {
-            Write-Host $e.Data
-            [void]$stdoutBuf.AppendLine($e.Data)
+    # Use & operator to run the command directly — output streams to console
+    # in real time and is also captured for logging.
+    try {
+        $output = & $resolvedPath @ArgList 2>&1 | ForEach-Object {
+            $line = $_.ToString()
+            Write-Host $line
+            $line
         }
-    })
-
-    $stderrBuf = [System.Text.StringBuilder]::new()
-    $proc.add_ErrorDataReceived({
-        param($s, $e)
-        if ($null -ne $e.Data) {
-            Write-Host $e.Data -ForegroundColor Yellow
-            [void]$stderrBuf.AppendLine($e.Data)
-        }
-    })
-
-    [void]$proc.Start()
-    $proc.BeginOutputReadLine()
-    $proc.BeginErrorReadLine()
-    $proc.WaitForExit()
-
-    if ($stdoutBuf.Length -gt 0) {
-        [System.IO.File]::AppendAllText($LOG_FILE, $stdoutBuf.ToString(), [System.Text.Encoding]::UTF8)
-    }
-    if ($stderrBuf.Length -gt 0) {
-        [System.IO.File]::AppendAllText($LOG_FILE, "[STDERR] " + $stderrBuf.ToString(), [System.Text.Encoding]::UTF8)
+        $exitCode = $LASTEXITCODE
+        if ($null -eq $exitCode) { $exitCode = 0 }
+    } catch {
+        Write-Warn "Command threw exception: $_"
+        Write-Log 'ERROR' "Command exception: $_"
+        $output = $_.ToString()
+        $exitCode = 1
     }
 
-    return $proc.ExitCode
+    # Write captured output to log
+    if ($output) {
+        $logText = ($output -join "`r`n") + "`r`n"
+        [System.IO.File]::AppendAllText($LOG_FILE, $logText, [System.Text.Encoding]::UTF8)
+    }
+
+    Write-Log 'DEBUG' "Exit code: $exitCode"
+    return $exitCode
 }
 
 # -- Pause --------------------------------------------------------------------
