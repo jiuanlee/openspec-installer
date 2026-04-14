@@ -121,8 +121,22 @@ function Write-Fatal([string]$Msg) {
 # Usage: Invoke-Command-Logged 'npm' @('install','--global','foo')
 function Invoke-Command-Logged([string]$Exe, [string[]]$ArgList) {
     Write-Log 'RUN' "$Exe $($ArgList -join ' ')"
+
+    # Resolve full path when UseShellExecute = false (ProcessStartInfo needs absolute path)
+    $resolvedExe = $Exe
+    if (-not [System.IO.Path]::IsPathRooted($Exe)) {
+        $cmd = Get-Command $Exe -ErrorAction SilentlyContinue
+        if ($cmd) {
+            $resolvedExe = $cmd.Source
+            Write-Log 'DEBUG' "Resolved '$Exe' to '$resolvedExe'"
+        } else {
+            Write-Log 'FATAL' "Cannot find command '$Exe' on PATH"
+            return -1
+        }
+    }
+
     $psi                        = [System.Diagnostics.ProcessStartInfo]::new()
-    $psi.FileName               = $Exe
+    $psi.FileName               = $resolvedExe
     $psi.Arguments              = $ArgList -join ' '
     $psi.RedirectStandardOutput = $true
     $psi.RedirectStandardError  = $true
