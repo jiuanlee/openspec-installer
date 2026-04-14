@@ -51,6 +51,15 @@ readonly NVM_VERSION="0.39.7"
 readonly NVM_INSTALL_URL="https://raw.githubusercontent.com/nvm-sh/nvm/v${NVM_VERSION}/install.sh"
 readonly SCRIPT_VERSION="1.0.0"
 
+# GitHub mirror list (for China mainland where github.com is often blocked)
+readonly GH_TARBALL="https://github.com/jiuanlee/openspec-installer/archive/refs/heads/main.tar.gz"
+GH_MIRRORS=(
+  "https://ghfast.top"
+  "https://ghproxy.net"
+  "https://gh-proxy.com"
+  "https://mirror.ghproxy.com"
+)
+
 # ─── Log file ────────────────────────────────────────────────────────────────
 # All output is tee'd to this file for debugging / audit.
 readonly LOG_DIR="${HOME}/.openspec-installer"
@@ -267,11 +276,49 @@ Open a new shell so PATH changes take effect, then re-run."
   fi
 }
 
+# ─── GitHub connectivity test ───────────────────────────────────────────────
+test_github() {
+  info "Testing GitHub connectivity …"
+  if curl -fsSL --connect-timeout 8 --max-time 12 -o /dev/null "https://github.com" 2>/dev/null; then
+    success "GitHub is reachable."
+    return 0
+  fi
+  warn "GitHub is unreachable (timeout / blocked)."
+  return 1
+}
+
+resolve_package_source() {
+  # 1) Direct GitHub
+  if test_github; then
+    RESOLVED_SOURCE="$PACKAGE_SOURCE"
+    return
+  fi
+
+  # 2) Try mirrors
+  for mirror in "${GH_MIRRORS[@]}"; do
+    local url="${mirror}/${GH_TARBALL}"
+    info "Trying mirror: ${mirror} …"
+    if curl -fsSL --connect-timeout 10 --max-time 15 -o /dev/null "$url" 2>/dev/null; then
+      success "Mirror OK: ${mirror}"
+      RESOLVED_SOURCE="$url"
+      return
+    fi
+    warn "Mirror ${mirror} failed."
+  done
+
+  # 3) Fallback to original
+  warn "All mirrors failed. Falling back to direct GitHub."
+  RESOLVED_SOURCE="$PACKAGE_SOURCE"
+}
+
 # ─── openspec-installer install ──────────────────────────────────────────────
 install_openspec_installer() {
   section "Installing ${PACKAGE_NAME}"
 
-  local npm_args=("install" "--global" "$PACKAGE_SOURCE" "--no-fund" "--no-audit")
+  resolve_package_source
+  info "Package source: ${RESOLVED_SOURCE}"
+
+  local npm_args=("install" "--global" "$RESOLVED_SOURCE" "--no-fund" "--no-audit")
 
   # Honour custom registry (enterprise / air-gapped)
   if [ -n "${OPENSPEC_NPM_REGISTRY:-}" ]; then

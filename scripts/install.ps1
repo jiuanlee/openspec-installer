@@ -46,6 +46,18 @@ $NODE_MIN_MAJOR   = 22
 $NODEJS_WINGET_ID = 'OpenJS.NodeJS.LTS'
 $NODEJS_MSI_BASE  = "https://nodejs.org/dist/latest-v${NODE_MIN_MAJOR}.x"
 
+# -- GitHub mirror (for China mainland) -------------------------------------
+# npm install github:xxx uses git clone under the hood, which is often
+# blocked / extremely slow in China.  We detect connectivity and fall back
+# to a tarball URL through a mirror when needed.
+$GH_MIRRORS = @(
+    'https://ghfast.top',
+    'https://ghproxy.net',
+    'https://gh-proxy.com',
+    'https://mirror.ghproxy.com'
+)
+$GH_TARBALL = 'https://github.com/jiuanlee/openspec-installer/archive/refs/heads/main.tar.gz'
+
 # -- Log file ----------------------------------------------------------------
 $LOG_DIR  = Join-Path $env:USERPROFILE '.openspec-installer'
 $LOG_FILE = Join-Path $LOG_DIR 'bootstrap.log'
@@ -322,6 +334,46 @@ function Invoke-EnsureNode([string]$Arch) {
     Write-Warn "Note: You may need to restart your terminal for PATH changes to persist."
 }
 
+# -- GitHub connectivity test ------------------------------------------------
+function Test-GithubConnectivity {
+    Write-Info "Testing GitHub connectivity ..."
+    try {
+        $resp = Invoke-WebRequest -Uri 'https://github.com' -UseBasicParsing -TimeoutSec 8 -ErrorAction Stop
+        if ($resp.StatusCode -eq 200) {
+            Write-Ok "GitHub is reachable."
+            return $true
+        }
+    } catch {}
+    Write-Warn "GitHub is unreachable (timeout / blocked)."
+    return $false
+}
+
+function Resolve-PackageSource {
+    # 1) Try direct GitHub first
+    if (Test-GithubConnectivity) {
+        return $PACKAGE_SOURCE          # github:jiuanlee/openspec-installer
+    }
+
+    # 2) Try mirrors
+    foreach ($mirror in $GH_MIRRORS) {
+        $url = "$mirror/$GH_TARBALL"
+        Write-Info "Trying mirror: $mirror ..."
+        try {
+            $resp = Invoke-WebRequest -Uri $url -UseBasicParsing -Method Head -TimeoutSec 10 -ErrorAction Stop
+            if ($resp.StatusCode -eq 200) {
+                Write-Ok "Mirror OK: $mirror"
+                return $url
+            }
+        } catch {
+            Write-Warn "Mirror $mirror failed."
+        }
+    }
+
+    # 3) Fall back to original source anyway (let npm report the error)
+    Write-Warn "All mirrors failed. Falling back to direct GitHub."
+    return $PACKAGE_SOURCE
+}
+
 # -- openspec-installer npm install ------------------------------------------
 function Invoke-InstallPackage {
     Write-Section "Installing $PACKAGE_NAME"
@@ -330,7 +382,10 @@ function Invoke-InstallPackage {
         Write-Fatal "'npm' not found on PATH. Ensure Node.js is installed and restart your terminal."
     }
 
-    $npmArgs = @('install', '--global', $PACKAGE_SOURCE, '--no-fund', '--no-audit')
+    $source = Resolve-PackageSource
+    Write-Info "Package source: $source"
+
+    $npmArgs = @('install', '--global', $source, '--no-fund', '--no-audit')
     $registry = if ($NpmRegistry) { $NpmRegistry } else { $env:OPENSPEC_NPM_REGISTRY }
     if ($registry) {
         Write-Info "Using custom registry: $registry"
@@ -405,4 +460,14 @@ function Main {
     Invoke-Pause
 }
 
-Main
+try {
+    Main
+} catch {
+    Write-Host ""
+    Write-Host "[fatal] Unexpected error: $_" -ForegroundColor Red
+    Write-Host "        $($_.ScriptStackTrace)" -ForegroundColor DarkGray
+    Write-Log 'FATAL' "Unexpected error: $_"
+    Write-Log 'FATAL' $_.ScriptStackTrace
+    Invoke-Pause
+    exit 1
+}

@@ -6,7 +6,13 @@
   "bin": {
     "openspec-installer": "dist/index.js"
   },
+  "files": [
+    "dist/",
+    "assets/",
+    "scripts/"
+  ],
   "scripts": {
+    "prepare": "npm run build",
     "build": "tsc",
     "dev": "ts-node src/index.ts",
     "test": "node --experimental-vm-modules node_modules/.bin/jest",
