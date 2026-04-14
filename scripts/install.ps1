@@ -59,6 +59,7 @@ $ErrorActionPreference = 'Stop'
 # ── Constants ─────────────────────────────────────────────────────────────────
 $SCRIPT_VERSION   = '1.0.0'
 $PACKAGE_NAME     = 'openspec-installer'
+$PACKAGE_SOURCE   = 'github:jiuanlee/openspec-installer'  # 直接从 GitHub 安装，无需 npm publish
 $NODE_MIN_MAJOR   = 22
 $NODEJS_WINGET_ID = 'OpenJS.NodeJS.LTS'
 $NODEJS_MSI_BASE  = "https://nodejs.org/dist/latest-v${NODE_MIN_MAJOR}.x"
@@ -330,7 +331,7 @@ function Invoke-InstallPackage {
         Write-Fatal "'npm' not found on PATH. Ensure Node.js is installed and restart your terminal."
     }
 
-    $npmArgs = @('install', '--global', $PACKAGE_NAME, '--no-fund', '--no-audit')
+    $npmArgs = @('install', '--global', $PACKAGE_SOURCE, '--no-fund', '--no-audit')
     $registry = if ($NpmRegistry) { $NpmRegistry } else { $env:OPENSPEC_NPM_REGISTRY }
     if ($registry) {
         Write-Info "Using custom registry: $registry"

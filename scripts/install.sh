@@ -45,6 +45,7 @@ set -euo pipefail
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 readonly PACKAGE_NAME="openspec-installer"
+readonly PACKAGE_SOURCE="github:jiuanlee/openspec-installer"  # 直接从 GitHub 安装
 readonly NODE_MIN_MAJOR=22
 readonly NVM_VERSION="0.39.7"
 readonly NVM_INSTALL_URL="https://raw.githubusercontent.com/nvm-sh/nvm/v${NVM_VERSION}/install.sh"
@@ -248,7 +249,7 @@ Open a new shell so PATH changes take effect, then re-run."
 install_openspec_installer() {
   section "Installing ${PACKAGE_NAME}"
 
-  local npm_args=("install" "--global" "$PACKAGE_NAME" "--no-fund" "--no-audit")
+  local npm_args=("install" "--global" "$PACKAGE_SOURCE" "--no-fund" "--no-audit")
 
   # Honour custom registry (enterprise / air-gapped)
   if [ -n "${OPENSPEC_NPM_REGISTRY:-}" ]; then
