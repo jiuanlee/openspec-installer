@@ -4,34 +4,16 @@
     openspec-installer bootstrap script for Windows (PowerShell).
 
 .DESCRIPTION
-    One-line install — choose the fastest source for your network:
+    One-line install:
 
-    [A] GitHub Raw（推荐）:
+    [A] GitHub Raw:
         irm https://raw.githubusercontent.com/jiuanlee/openspec-installer/main/scripts/install.ps1 | iex
 
-    [B] jsDelivr CDN（GitHub 自动加速，国内备选）:
+    [B] jsDelivr CDN:
         irm https://cdn.jsdelivr.net/gh/jiuanlee/openspec-installer@main/scripts/install.ps1 | iex
 
-    [C] 本地执行（已下载脚本）:
+    [C] Local:
         .\install.ps1
-
-    With pre-supplied credentials (CI / unattended):
-        $env:TAPD_API_TOKEN   = "your-tapd-token"
-        .\install.ps1
-
-    What this script does:
-        1. Detects Windows version and architecture
-        2. Ensures Node.js >= 22 is installed  (winget → MSI fallback)
-        3. Installs openspec-installer globally via npm
-        4. Runs openspec-installer (openspec + Claude Code integration)
-
-    Supported:
-        Windows 10 1709+ / Windows 11  (x64, arm64)
-        PowerShell 5.1+ and PowerShell 7+
-
-    Exit codes:
-        0  success
-        1  fatal error
 
 .PARAMETER SkipNode
     Skip the Node.js installation step (assume node >= 22 is already on PATH).
@@ -56,17 +38,15 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-# ── Constants ─────────────────────────────────────────────────────────────────
+# -- Constants ---------------------------------------------------------------
 $SCRIPT_VERSION   = '1.0.0'
 $PACKAGE_NAME     = 'openspec-installer'
-$PACKAGE_SOURCE   = 'github:jiuanlee/openspec-installer'  # 直接从 GitHub 安装，无需 npm publish
+$PACKAGE_SOURCE   = 'github:jiuanlee/openspec-installer'
 $NODE_MIN_MAJOR   = 22
 $NODEJS_WINGET_ID = 'OpenJS.NodeJS.LTS'
 $NODEJS_MSI_BASE  = "https://nodejs.org/dist/latest-v${NODE_MIN_MAJOR}.x"
 
-# ── Log file ──────────────────────────────────────────────────────────────────
-# All output (info / warn / error / command output) is tee'd to this file.
-# Even if the window closes instantly the user can review the log.
+# -- Log file ----------------------------------------------------------------
 $LOG_DIR  = Join-Path $env:USERPROFILE '.openspec-installer'
 $LOG_FILE = Join-Path $LOG_DIR 'bootstrap.log'
 
@@ -75,23 +55,22 @@ function Init-Log {
         New-Item -ItemType Directory -Path $LOG_DIR -Force | Out-Null
     }
     $ts = Get-Date -Format 'yyyy-MM-ddTHH:mm:ss'
-    # Use UTF8 encoding for log file (PowerShell 5.1 defaults to ASCII)
-    Add-Content -Path $LOG_FILE -Value "" -Encoding UTF8
-    Add-Content -Path $LOG_FILE -Value ("-" * 72) -Encoding UTF8
-    Add-Content -Path $LOG_FILE -Value "$ts [START] openspec-installer bootstrap v$SCRIPT_VERSION" -Encoding UTF8
+    [System.IO.File]::AppendAllText($LOG_FILE, "", [System.Text.Encoding]::UTF8)
+    [System.IO.File]::AppendAllText($LOG_FILE, ("-" * 72) + "`r`n", [System.Text.Encoding]::UTF8)
+    [System.IO.File]::AppendAllText($LOG_FILE, "$ts [START] openspec-installer bootstrap v$SCRIPT_VERSION`r`n", [System.Text.Encoding]::UTF8)
 }
 
 function Write-Log([string]$Level, [string]$Msg) {
     $ts   = Get-Date -Format 'yyyy-MM-ddTHH:mm:ss'
-    $line = "$ts [$($Level.ToUpper().PadRight(5))] $Msg"
-    Add-Content -Path $LOG_FILE -Value $line -Encoding UTF8 -ErrorAction SilentlyContinue
+    $line = "$ts [$($Level.ToUpper().PadRight(5))] $Msg`r`n"
+    [System.IO.File]::AppendAllText($LOG_FILE, $line, [System.Text.Encoding]::UTF8)
 }
 
-# ── Colour + log helpers ──────────────────────────────────────────────────────
+# -- Colour + log helpers -----------------------------------------------------
 function Write-Section([string]$Title) {
     Write-Host ""
-    Write-Host ("── " + $Title + " ──") -ForegroundColor Cyan
-    Write-Log 'INFO' "── $Title ──"
+    Write-Host "-- $Title --" -ForegroundColor Cyan
+    Write-Log 'INFO' "-- $Title --"
 }
 
 function Write-Info([string]$Msg) {
@@ -118,15 +97,10 @@ function Write-Fatal([string]$Msg) {
     exit 1
 }
 
-# ── Run a command, stream output live AND write to log ───────────────────────
-# Usage: Invoke-Command-Logged 'npm' @('install','--global','foo')
-#
-# Note: Windows npm is a .cmd file, so we use cmd.exe /c to execute it.
-# This works for both .exe and .cmd/.bat files.
+# -- Run a command, stream output live AND write to log ----------------------
 function Invoke-Command-Logged([string]$Exe, [string[]]$ArgList) {
     Write-Log 'RUN' "$Exe $($ArgList -join ' ')"
 
-    # Resolve full path for logging
     $resolvedPath = $Exe
     $cmdInfo = Get-Command $Exe -ErrorAction SilentlyContinue
     if ($cmdInfo) {
@@ -137,11 +111,13 @@ function Invoke-Command-Logged([string]$Exe, [string[]]$ArgList) {
         return -1
     }
 
-    # Check if it's a .cmd/.bat file — need to run via cmd.exe
     $ext = [System.IO.Path]::GetExtension($resolvedPath).ToLower()
     if ($ext -in @('.cmd', '.bat')) {
         $psiFileName  = 'cmd.exe'
         $psiArgs      = @('/c', $resolvedPath) + $ArgList
+    } elseif ($ext -eq '.ps1') {
+        $psiFileName  = 'powershell.exe'
+        $psiArgs      = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $resolvedPath) + $ArgList
     } else {
         $psiFileName  = $resolvedPath
         $psiArgs      = $ArgList
@@ -154,13 +130,14 @@ function Invoke-Command-Logged([string]$Exe, [string[]]$ArgList) {
     $psi.RedirectStandardError  = $true
     $psi.UseShellExecute        = $false
     $psi.CreateNoWindow         = $false
+    $psi.StandardOutputEncoding = [System.Text.Encoding]::UTF8
+    $psi.StandardErrorEncoding  = [System.Text.Encoding]::UTF8
 
     Write-Log 'DEBUG' "Executing: $psiFileName $($psiArgs -join ' ')"
 
     $proc = [System.Diagnostics.Process]::new()
     $proc.StartInfo = $psi
 
-    # Async read stdout
     $stdoutBuf = [System.Text.StringBuilder]::new()
     $proc.add_OutputDataReceived({
         param($s, $e)
@@ -170,7 +147,6 @@ function Invoke-Command-Logged([string]$Exe, [string[]]$ArgList) {
         }
     })
 
-    # Async read stderr — shown in yellow so it's visually distinct
     $stderrBuf = [System.Text.StringBuilder]::new()
     $proc.add_ErrorDataReceived({
         param($s, $e)
@@ -185,22 +161,18 @@ function Invoke-Command-Logged([string]$Exe, [string[]]$ArgList) {
     $proc.BeginErrorReadLine()
     $proc.WaitForExit()
 
-    # Flush buffered output to log file
-    if ($stdoutBuf.Length -gt 0) { Add-Content -Path $LOG_FILE -Value $stdoutBuf.ToString() -Encoding UTF8 -ErrorAction SilentlyContinue }
-    if ($stderrBuf.Length -gt 0) { Add-Content -Path $LOG_FILE -Value ("[STDERR] " + $stderrBuf.ToString()) -Encoding UTF8 -ErrorAction SilentlyContinue }
+    if ($stdoutBuf.Length -gt 0) {
+        [System.IO.File]::AppendAllText($LOG_FILE, $stdoutBuf.ToString(), [System.Text.Encoding]::UTF8)
+    }
+    if ($stderrBuf.Length -gt 0) {
+        [System.IO.File]::AppendAllText($LOG_FILE, "[STDERR] " + $stderrBuf.ToString(), [System.Text.Encoding]::UTF8)
+    }
 
     return $proc.ExitCode
 }
 
-# ── Pause — reliable across irm|iex AND double-click ─────────────────────────
-# irm|iex: stdin is NOT redirected (iex evaluates a string, doesn't pipe stdin)
-# Double-click / Run dialog: opens a new ConsoleHost window
-# CI (& script): typically non-interactive ($Host.Name != ConsoleHost)
-#
-# Strategy: try ReadKey first; if that throws (non-interactive host), fall back
-# to Read-Host which works in more contexts; if both fail, just return silently.
+# -- Pause --------------------------------------------------------------------
 function Invoke-Pause {
-    # Never pause in CI / non-interactive environments
     if (-not [Environment]::UserInteractive) { return }
     if ($Host.Name -ne 'ConsoleHost')        { return }
 
@@ -208,23 +180,22 @@ function Invoke-Pause {
     Write-Host "Log saved to: $LOG_FILE" -ForegroundColor DarkGray
     Write-Host "Press ENTER to close..." -ForegroundColor DarkGray
     try {
-        # ReadKey works in real console windows
         $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
     } catch {
-        try { Read-Host } catch { <# swallow — best effort #> }
+        try { Read-Host } catch {}
     }
 }
 
-# ── Prerequisite: execution policy ───────────────────────────────────────────
+# -- Prerequisite: execution policy ------------------------------------------
 function Assert-ExecutionPolicy {
     $policy = Get-ExecutionPolicy -Scope CurrentUser
     if ($policy -eq 'Restricted') {
-        Write-Info "Setting ExecutionPolicy to RemoteSigned for CurrentUser …"
+        Write-Info "Setting ExecutionPolicy to RemoteSigned for CurrentUser..."
         Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force
     }
 }
 
-# ── OS / arch detection ───────────────────────────────────────────────────────
+# -- OS / arch detection ------------------------------------------------------
 function Get-PlatformInfo {
     $os   = [System.Environment]::OSVersion.VersionString
     $arch = if ([System.Environment]::Is64BitOperatingSystem) {
@@ -236,12 +207,12 @@ function Get-PlatformInfo {
     return $arch
 }
 
-# ── Command check ─────────────────────────────────────────────────────────────
+# -- Command check ------------------------------------------------------------
 function Test-Command([string]$Cmd) {
     return [bool](Get-Command $Cmd -ErrorAction SilentlyContinue)
 }
 
-# ── Node.js version check ─────────────────────────────────────────────────────
+# -- Node.js version check ----------------------------------------------------
 function Get-NodeMajor {
     if (-not (Test-Command 'node')) { return 0 }
     try {
@@ -255,9 +226,9 @@ function Test-NodeSatisfies {
     return (Get-NodeMajor) -ge $NODE_MIN_MAJOR
 }
 
-# ── winget install ────────────────────────────────────────────────────────────
+# -- winget install -----------------------------------------------------------
 function Install-NodeViaWinget {
-    Write-Info "Installing Node.js $NODE_MIN_MAJOR via winget …"
+    Write-Info "Installing Node.js $NODE_MIN_MAJOR via winget..."
     $wingetArgs = @(
         'install', '--id', $NODEJS_WINGET_ID,
         '--exact',
@@ -272,9 +243,9 @@ function Install-NodeViaWinget {
     return $true
 }
 
-# ── MSI fallback ─────────────────────────────────────────────────────────────
+# -- MSI fallback ------------------------------------------------------------
 function Install-NodeViaMsi([string]$Arch) {
-    Write-Info "Downloading Node.js $NODE_MIN_MAJOR MSI installer …"
+    Write-Info "Downloading Node.js $NODE_MIN_MAJOR MSI installer..."
     $msiArch  = if ($Arch -eq 'arm64') { 'arm64' } else { 'x64' }
     $indexUrl = "$NODEJS_MSI_BASE/SHASUMS256.txt"
     try {
@@ -294,7 +265,7 @@ function Install-NodeViaMsi([string]$Arch) {
         Write-Fatal "MSI download failed: $_"
     }
 
-    Write-Info "Running MSI installer (silent) …"
+    Write-Info "Running MSI installer (silent)..."
     $result = Start-Process 'msiexec.exe' -ArgumentList "/i `"$tmpMsi`" /quiet /norestart ADDLOCAL=ALL" -Wait -PassThru
     Remove-Item $tmpMsi -ErrorAction SilentlyContinue
 
@@ -313,13 +284,13 @@ function Install-NodeViaMsi([string]$Arch) {
     }
 }
 
-# ── Node.js orchestrator ──────────────────────────────────────────────────────
+# -- Node.js orchestrator -----------------------------------------------------
 function Invoke-EnsureNode([string]$Arch) {
     Write-Section "Node.js >= $NODE_MIN_MAJOR"
 
     if (Test-NodeSatisfies) {
         $ver = & node --version
-        Write-Ok "Node.js $ver already satisfies >= $NODE_MIN_MAJOR — skipping."
+        Write-Ok "Node.js $ver already satisfies >= $NODE_MIN_MAJOR - skipping."
         return
     }
 
@@ -327,15 +298,15 @@ function Invoke-EnsureNode([string]$Arch) {
     if ($current -gt 0) {
         Write-Warn "Node.js v$current found, needs upgrade to >= $NODE_MIN_MAJOR."
     } else {
-        Write-Info "Node.js not found — installing …"
+        Write-Info "Node.js not found - installing..."
     }
 
     $wingetOk = $false
     if (Test-Command 'winget') {
         $wingetOk = Install-NodeViaWinget
-        if (-not $wingetOk) { Write-Warn "winget install failed — falling back to MSI download." }
+        if (-not $wingetOk) { Write-Warn "winget install failed - falling back to MSI download." }
     } else {
-        Write-Warn "winget not available — falling back to MSI download."
+        Write-Warn "winget not available - falling back to MSI download."
     }
 
     if (-not $wingetOk) { Install-NodeViaMsi -Arch $Arch }
@@ -351,7 +322,7 @@ function Invoke-EnsureNode([string]$Arch) {
     Write-Warn "Note: You may need to restart your terminal for PATH changes to persist."
 }
 
-# ── openspec-installer npm install ────────────────────────────────────────────
+# -- openspec-installer npm install ------------------------------------------
 function Invoke-InstallPackage {
     Write-Section "Installing $PACKAGE_NAME"
 
@@ -366,7 +337,7 @@ function Invoke-InstallPackage {
         $npmArgs += @('--registry', $registry)
     }
 
-    Write-Info "Running: npm $($npmArgs -join ' ') …"
+    Write-Info "Running: npm $($npmArgs -join ' ') ..."
     $exitCode = Invoke-Command-Logged 'npm' $npmArgs
 
     if ($exitCode -ne 0) {
@@ -377,13 +348,13 @@ function Invoke-InstallPackage {
         $globalBin = & npm bin -g 2>$null
         Write-Warn "$PACKAGE_NAME installed but not found on PATH."
         if ($globalBin) { Write-Warn "Add '$globalBin' to your PATH, then re-run." }
-        Write-Fatal "Cannot continue — $PACKAGE_NAME is not executable."
+        Write-Fatal "Cannot continue - $PACKAGE_NAME is not executable."
     }
 
     Write-Ok "$PACKAGE_NAME installed successfully."
 }
 
-# ── Run openspec-installer ────────────────────────────────────────────────────
+# -- Run openspec-installer ---------------------------------------------------
 function Invoke-Installer {
     Write-Section "Running $PACKAGE_NAME"
 
@@ -398,12 +369,12 @@ function Invoke-Installer {
     }
 }
 
-# ── Summary ───────────────────────────────────────────────────────────────────
+# -- Summary ------------------------------------------------------------------
 function Write-Summary {
     Write-Host ""
-    Write-Host "╔══════════════════════════════════════════╗" -ForegroundColor Green
-    Write-Host "║            Setup Complete!               ║" -ForegroundColor Green
-    Write-Host "╚══════════════════════════════════════════╝" -ForegroundColor Green
+    Write-Host "+==========================================+" -ForegroundColor Green
+    Write-Host "|            Setup Complete!               |" -ForegroundColor Green
+    Write-Host "+==========================================+" -ForegroundColor Green
     Write-Host ""
     Write-Host "  Run " -NoNewline
     Write-Host "openspec --help" -ForegroundColor Cyan -NoNewline
@@ -412,14 +383,14 @@ function Write-Summary {
     Write-Log 'OK' "Setup complete."
 }
 
-# ── Main ──────────────────────────────────────────────────────────────────────
+# -- Main ---------------------------------------------------------------------
 function Main {
     Init-Log
 
     Write-Host ""
-    Write-Host "╔══════════════════════════════════════════╗" -ForegroundColor Cyan
-    Write-Host "║  openspec-installer bootstrap v$SCRIPT_VERSION    ║" -ForegroundColor Cyan
-    Write-Host "╚══════════════════════════════════════════╝" -ForegroundColor Cyan
+    Write-Host "+==========================================+" -ForegroundColor Cyan
+    Write-Host "|  openspec-installer bootstrap v$SCRIPT_VERSION    |" -ForegroundColor Cyan
+    Write-Host "+==========================================+" -ForegroundColor Cyan
     Write-Host ""
     Write-Info "Log file: $LOG_FILE"
 
