@@ -82,7 +82,7 @@ async function main(): Promise<void> {
   // ────────────────────────────────────────────
 
   // ── Node.js ──────────────────────────────────────────────────────────
-  logger.section('Phase 2 - Install Node.js >= 22');
+  logger.section('Phase 2 - Install Node.js >= 18');
 
   if (args.skipNode) {
     logger.info('--skip-node: skipping Node.js check.');
@@ -90,7 +90,7 @@ async function main(): Promise<void> {
     const nodeResult = await ensureNode(osInfo);
     logger.raw(formatNodeResult(nodeResult));
     if (!nodeResult.success) {
-      logger.error('Node.js >= 22 is required. Aborting.');
+      logger.error('Node.js >= 18 is required. Aborting.');
       process.exit(1);
     }
   }

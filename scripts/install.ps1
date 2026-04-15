@@ -42,7 +42,7 @@ $ErrorActionPreference = 'Stop'
 $SCRIPT_VERSION   = '1.0.0'
 $PACKAGE_NAME     = 'openspec-installer'
 $PACKAGE_SOURCE   = 'github:jiuanlee/openspec-installer'
-$NODE_MIN_MAJOR   = 22
+$NODE_MIN_MAJOR   = 18   # Claude Code requires Node.js >= 18
 $NODEJS_WINGET_ID = 'OpenJS.NodeJS.LTS'
 $NODEJS_MSI_BASE  = "https://nodejs.org/dist/latest-v${NODE_MIN_MAJOR}.x"
 
@@ -228,6 +228,27 @@ function Install-NodeViaWinget {
 # -- MSI fallback ------------------------------------------------------------
 function Install-NodeViaMsi([string]$Arch) {
     Write-Info "Downloading Node.js $NODE_MIN_MAJOR MSI installer..."
+
+    # -- Uninstall existing Node.js first to avoid version conflict (exit 1603) --
+    $existingNode = Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*" -ErrorAction SilentlyContinue |
+                    Where-Object { $_.DisplayName -match "Node.js" }
+    if ($existingNode) {
+        Write-Info "Found existing Node.js installation - attempting uninstall..."
+        $uninstallCmd = $existingNode.UninstallString
+        if ($uninstallCmd) {
+            # UninstallString is usually "MsiExec.exe /X{GUID}" or similar
+            $result = Start-Process 'msiexec.exe' -ArgumentList "/x $($existingNode.UninstallString -replace 'MsiExec\.exe\s+','') /quiet /norestart" -Wait -PassThru -ErrorAction SilentlyContinue
+            if ($result.ExitCode -eq 0 -or $result.ExitCode -eq 1605 -or $result.ExitCode -eq 3010) {
+                Write-Info "Old Node.js uninstalled successfully."
+                if ($result.ExitCode -eq 3010) {
+                    Write-Warn "A restart may be needed. Continuing anyway..."
+                }
+            } else {
+                Write-Warn "Uninstall failed (exit $($result.ExitCode)). Will try installing anyway..."
+            }
+        }
+    }
+
     $msiArch  = if ($Arch -eq 'arm64') { 'arm64' } else { 'x64' }
     $indexUrl = "$NODEJS_MSI_BASE/SHASUMS256.txt"
     try {
@@ -252,7 +273,9 @@ function Install-NodeViaMsi([string]$Arch) {
     Remove-Item $tmpMsi -ErrorAction SilentlyContinue
 
     if ($result.ExitCode -ne 0 -and $result.ExitCode -ne 3010) {
-        Write-Fatal "MSI installation failed with exit code $($result.ExitCode)."
+        Write-Fatal "MSI installation failed with exit code $($result.ExitCode).`n" +
+                    "This often happens when an older Node.js version is installed.`n" +
+                    "Please manually uninstall Node.js from Control Panel and re-run this script."
     }
 
     $env:PATH = [System.Environment]::GetEnvironmentVariable('PATH', 'Machine') + ';' +

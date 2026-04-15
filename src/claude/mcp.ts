@@ -161,7 +161,7 @@ export async function registerConfluenceMcp(
       success:      false,
       status:       'failed',
       settingsFile,
-      summary:      `写入 ${path.basename(settingsFile)} 失败：${(err as Error).message}`,
+      summary:      `Failed to write ${path.basename(settingsFile)}: ${(err as Error).message}`,
       warnings,
     };
   }
@@ -173,7 +173,7 @@ export async function registerConfluenceMcp(
     status,
     settingsFile,
     summary:
-      `confluence-mcp ${status === 'registered' ? '注册成功' : '已更新'}（HTTP 模式）-> ${MCP_HTTP_URL}`,
+      `confluence-mcp ${status === 'registered' ? 'registered' : 'updated'} (HTTP mode) -> ${MCP_HTTP_URL}`,
     warnings,
   };
 }

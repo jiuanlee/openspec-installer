@@ -1,9 +1,9 @@
 /**
- * node.ts — Node.js >= 22.x Installation
+ * node.ts — Node.js >= 18.x Installation
  *
  * Responsibilities:
  *  1. Detect the currently installed Node.js version (if any)
- *  2. Decide whether installation / upgrade is needed (semver >= 22.0.0)
+ *  2. Decide whether installation / upgrade is needed (semver >= 18.0.0)
  *  3. Dispatch to the correct platform strategy:
  *       windows → winget  (fallback: direct MSI download hint)
  *       macos   → brew    (fallback: nvm)
@@ -33,7 +33,7 @@ import { logger } from '../logger';
 // ─────────────────────────────────────────────
 
 /** Target Node.js major version */
-const NODE_TARGET_MAJOR = 22;
+const NODE_TARGET_MAJOR = 18;  // Claude Code requires Node.js >= 18
 
 /** nvm installer version pinned for reproducibility */
 const NVM_VERSION = '0.39.7';
@@ -64,7 +64,7 @@ export interface CommandResult {
 }
 
 export interface NodeInstallResult {
-  /** Whether Node.js >= 22 is available after this function returns */
+  /** Whether Node.js >= 18 is available after this function returns */
   success: boolean;
   /** Which install path was taken */
   method: InstallMethod;
@@ -295,7 +295,7 @@ async function installViaNvm(osInfo: OsInfo): Promise<CommandResult> {
 // ─────────────────────────────────────────────
 
 /**
- * Ensure Node.js >= 22.x is installed on the user's system.
+ * Ensure Node.js >= 18.x is installed on the user's system.
  *
  * The function:
  *  1. Probes the current Node version — returns early if already satisfied
@@ -333,7 +333,7 @@ export async function ensureNode(osInfo: OsInfo): Promise<NodeInstallResult> {
       `needs upgrade to >= ${NODE_TARGET_MAJOR}.`
     );
   } else {
-    logger.info('[node] Node.js not found — proceeding with installation.');
+    logger.info('[node] Node.js not found - proceeding with installation.');
   }
 
   // ── Step 2: Select & run install strategy ───────────────────────────
@@ -368,7 +368,7 @@ export async function ensureNode(osInfo: OsInfo): Promise<NodeInstallResult> {
 
     if (!cmdResult.ok) {
       // Homebrew failed — try nvm as macOS fallback
-      logger.warn('[node:brew] Homebrew install failed — falling back to nvm …');
+      logger.warn('[node:brew] Homebrew install failed - falling back to nvm ...');
       method    = 'nvm';
       cmdResult = await installViaNvm(osInfo);
     }

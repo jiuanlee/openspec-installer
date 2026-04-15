@@ -10,7 +10,7 @@
  *   --force-mcp       Force re-register confluence-mcp only.
  *   --force-openspec  Force re-install openspec only.
  *
- *   --skip-node       Skip Node.js install (assume >= 22 is on PATH).
+ *   --skip-node       Skip Node.js install (assume >= 18 is on PATH).
  *   --skip-openspec   Skip openspec install.
  *   --skip-claude     Skip Phase 3 (tapd-api + confluence-mcp) entirely.
  *
@@ -52,7 +52,7 @@ Environment variables:
   LOG_LEVEL              debug | info | warn | error | silent  (default: info)
 
 Examples:
-  # Normal install (idempotent — skips already-installed components)
+  # Normal install (idempotent - skips already-installed components)
   openspec-installer
 
   # Force reinstall everything

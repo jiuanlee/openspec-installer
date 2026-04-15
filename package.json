@@ -7,9 +7,9 @@
     "openspec-installer": "dist/index.js"
   },
   "files": [
-    "dist/",
-    "assets/",
-    "scripts/"
+    "dist/**/*.js",
+    "assets/**/*",
+    "scripts/**/*"
   ],
   "scripts": {
     "build": "tsc",
@@ -30,6 +30,6 @@
     "typescript": "^5.4.5"
   },
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=18.0.0"
   }
 }

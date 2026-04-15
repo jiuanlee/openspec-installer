@@ -173,7 +173,7 @@ async function ensureOpenspec(osInfo, opts = {}) {
             status: 'failed',
             version: null,
             previousVersion,
-            summary: 'npm not found on PATH. Ensure Node.js >= 22 is installed and that ' +
+            summary: 'npm not found on PATH. Ensure Node.js >= 18 is installed and that ' +
                 '`npm` is available before running this step.',
             warnings,
         };
