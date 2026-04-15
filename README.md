@@ -8,23 +8,37 @@
 
 ## 快速开始
 
+> **推荐安装方式**：使用 PowerShell / curl 脚本安装（无需 npm 全局安装，避免符号链接问题）
+
 ### macOS / Linux / WSL
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/jiuanlee/openspec-installer/main/scripts/install.sh | bash
+curl -fsSL https://cdn.jsdelivr.net/gh/jiuanlee/openspec-installer@main/scripts/install.sh | bash
 ```
 
 ### Windows（PowerShell）
 
 ```powershell
-irm https://raw.githubusercontent.com/jiuanlee/openspec-installer/main/scripts/install.ps1 | iex
+irm https://cdn.jsdelivr.net/gh/jiuanlee/openspec-installer@main/scripts/install.ps1 | iex
 ```
+
+> 使用 jsDelivr CDN 加速（GitHub raw 有 5 分钟缓存）
 
 安装完成后运行：
 
 ```bash
 openspec --help
 ```
+
+### 备选方案：npm 全局安装
+
+如果你有 npm 权限，可以发布到 npm registry 后安装：
+
+```bash
+npm install -g openspec-installer
+```
+
+> ⚠️ 注意：`npm install -g github:jiuanlee/openspec-installer` 在部分环境（如 nvm4w）会因符号链接指向临时目录而失败，不推荐使用。
 
 ---
 
@@ -33,7 +47,7 @@ openspec --help
 | 阶段 | 内容 |
 |------|------|
 | Phase 1 · 检测 | 识别操作系统（windows / macos / linux / WSL）、CPU 架构（x64 / arm64）、Claude Code 安装状态 |
-| Phase 2 · 安装 | 自动安装 Node.js >= 22（winget / brew / nvm）、全局安装 openspec |
+| Phase 2 · 安装 | 自动安装 Node.js >= 18（winget / brew / nvm / MSI）、全局安装 openspec |
 | Phase 3 · 集成 | 注入 `tapd-api` skill、注册 `confluence-mcp-server` 到 Claude Code |
 
 ---
@@ -153,11 +167,66 @@ npm run build
 
 ---
 
+## 修复历史
+
+| 版本 | 日期 | 修复内容 |
+|------|------|----------|
+| v1.0.0 | 2026-04-15 | **Node.js 18+ 支持**：降低最低版本要求至 18（Claude Code 官方要求），自动卸载旧版 Node.js 避免 MSI 1603 错误 |
+| v1.0.0 | 2026-04-15 | **npm 包优化**：排除 `.d.ts` 和 `.map` 文件，解决 `TAR_ENTRY_ERROR` 错误 |
+| v1.0.0 | 2026-04-14 | **Windows 兼容性**：替换所有 Unicode 字符为 ASCII，解决终端乱码问题 |
+| v1.0.0 | 2026-04-14 | **实时输出**：改用 `& $exe` 直接执行，支持命令输出实时显示 |
+| v1.0.0 | 2026-04-14 | **日志持久化**：PowerShell 和 bash 脚本均记录日志到 `~/.openspec-installer/` |
+| v1.0.0 | 2026-04-14 | **防闪退**：PowerShell 脚本增加 try/catch 和 pause，错误时显示信息后再退出 |
+
+### 详细修复说明
+
+#### 1. Node.js 版本要求降低至 18+
+- **问题**：原要求 Node.js >= 22，用户已有 Node.js 21 仍需升级
+- **修复**：改为 >= 18（Claude Code 官方最低要求）
+- **相关文件**：`src/install/node.ts`, `scripts/install.ps1`, `package.json`
+
+#### 2. MSI 安装 1603 错误
+- **问题**：Windows MSI 安装旧版本 Node.js 时冲突，退出码 1603
+- **修复**：安装新版前先检测并卸载旧版 Node.js
+- **相关文件**：`scripts/install.ps1::Install-NodeViaMsi()`
+
+#### 3. npm 包包含 `.d.ts` 文件导致安装错误
+- **问题**：`npm install -g github:...` 时报错 `TAR_ENTRY_ERROR ENOENT`
+- **修复**：`package.json` 的 `"files"` 改为 `dist/**/*.js`，排除类型声明文件
+- **相关文件**：`package.json`
+
+#### 4. Windows 终端乱码（?  路 鉁？等）
+- **问题**：Windows 默认代码页无法显示 Unicode 框线字符和中文
+- **修复**：全部替换为 ASCII：
+  - `╔║╚╠╣` → `+|=`
+  - `✔✘` → `[ok][x]`
+  - `——` → `--`
+  - `·` → `-`
+  - 中文 summary → 英文
+- **相关文件**：`src/*.ts`, `src/**/*.ts`
+
+#### 5. 命令输出无法实时显示
+- **问题**：`ProcessStartInfo` 的 `RedirectStandardOutput` 在 `irm|iex` 模式下异步事件不触发
+- **修复**：改用 `& $resolvedPath @ArgList 2>&1 | ForEach-Object` 直接执行
+- **相关文件**：`scripts/install.ps1::Invoke-Command-Logged()`
+
+#### 6. 日志文件编码问题
+- **问题**：PowerShell 5.1 `Add-Content` 默认 ASCII 编码，日志乱码
+- **修复**：使用 `[System.IO.File]::AppendAllText()` 指定 UTF8 编码
+- **相关文件**：`scripts/install.ps1`
+
+#### 7. 窗口闪退无法查看错误
+- **问题**：`$ErrorActionPreference='Stop'` 导致异常直接退出，`Invoke-Pause` 不执行
+- **修复**：`Main` 函数包裹 `try/catch`，确保 pause 始终执行
+- **相关文件**：`scripts/install.ps1`
+
+---
+
 ## 系统要求
 
 | 项目 | 要求 |
 |------|------|
-| Node.js | >= 22（由安装脚本自动处理） |
+| Node.js | >= 18（由安装脚本自动处理） |
 | 操作系统 | Windows 10 1709+ / macOS 12+ / Ubuntu 20.04+ / WSL2 |
 | CPU | x64 或 arm64 |
 | Claude Code | >= 1.0（Phase 3 需要，未安装则跳过） |
