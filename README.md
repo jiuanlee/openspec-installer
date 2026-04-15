@@ -13,16 +13,16 @@
 ### macOS / Linux / WSL
 
 ```bash
-curl -fsSL https://cdn.jsdelivr.net/gh/jiuanlee/openspec-installer@main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/jiuanlee/openspec-installer/main/scripts/install.sh | bash
 ```
 
 ### Windows（PowerShell）
 
 ```powershell
-irm https://cdn.jsdelivr.net/gh/jiuanlee/openspec-installer@main/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/jiuanlee/openspec-installer/main/scripts/install.ps1 | iex
 ```
 
-> 使用 jsDelivr CDN 加速（GitHub raw 有 5 分钟缓存）
+> 如果无法访问 jsDelivr CDN，请使用 GitHub raw 地址（上方默认命令）
 
 安装完成后运行：
 
